@@ -11,6 +11,7 @@ To add a new scenario
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+import inspect
 
 from common import (
     PALETTE, FONT_MONO, FONT_SMALL, FONT_TITLE, FONT_HEAD,
@@ -26,6 +27,7 @@ from scenarios.scenario_iws_delay import ScenarioIWSDelay
 from scenarios.scenario_replenishment_check import ScenarioReplenishmentIneligible
 from scenarios.scenario_duplicate_inventory import ScenarioDuplicateInventory
 from scenarios.scenario_missing_carcasses import ScenarioMissingCarcasses
+from scenarios.scenario_failed_transactions import ScenarioFailedTransactions
 
 SCENARIOS = [
     ScenarioLoadWontClose,
@@ -34,6 +36,7 @@ SCENARIOS = [
     ScenarioReplenishmentIneligible,
     ScenarioDuplicateInventory,
     ScenarioMissingCarcasses,
+    ScenarioFailedTransactions,
     # Add future scenario classes here
 ]
 
@@ -486,6 +489,27 @@ class WarehouseDiagnosticsApp(tk.Tk):
         styled_label(left, "  SCENARIOS", font=("Consolas", 9),
                      color=PALETTE["text_dim"]).pack(anchor="w", padx=10, pady=(4, 4))
 
+        # Search box
+        search_frame = tk.Frame(left, bg=PALETTE["surface"], padx=10)
+        search_frame.pack(fill="x", pady=(0, 4))
+        self._search_var = tk.StringVar()
+        self._search_var.trace_add("write", self._on_search_change)
+        search_entry = styled_entry(search_frame, width=20)
+        search_entry.config(textvariable=self._search_var)
+        search_entry.pack(fill="x", ipady=3)
+
+        # Build search index: ScenarioClass → list of searchable terms
+        self._search_index = {}
+        for ScenarioClass in SCENARIOS:
+            module = inspect.getmodule(ScenarioClass)
+            query_titles = [
+                qry.TITLE.lower()
+                for qry in getattr(module, "QUERIES", [])
+            ]
+            self._search_index[ScenarioClass] = (
+                [ScenarioClass.TITLE.lower()] + query_titles
+            )
+
         for ScenarioClass in SCENARIOS:
             btn = tk.Button(
                 left,
@@ -608,16 +632,24 @@ class WarehouseDiagnosticsApp(tk.Tk):
         self._update_overlay()
 
     def _refresh_sidebar_visibility(self, environment: str | None):
-        """Show only scenarios that support the connected environment."""
+        """Show only scenarios that match the connected environment and search term."""
+        term = self._search_var.get().strip().lower() if hasattr(self, "_search_var") else ""
         for sc, btn in self._sidebar_btns.items():
-            if environment and environment in sc.ENVIRONMENTS:
+            env_match    = environment and environment in sc.ENVIRONMENTS
+            search_terms = self._search_index.get(sc, [sc.TITLE.lower()])
+            search_match = not term or any(term in t for t in search_terms)
+            if env_match and search_match:
                 btn.pack(fill="x")
             else:
                 btn.pack_forget()
-                # Close tab if it was open and is now hidden
                 if sc in self._open_frames:
                     self._tab_bar.close_tab(sc)
                     self._open_frames[sc].pack_forget()
+
+    def _on_search_change(self, *_):
+        """Re-filter sidebar when search term changes."""
+        env = db.active_plant.environment.upper() if db.connected and db.active_plant else None
+        self._refresh_sidebar_visibility(env)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
