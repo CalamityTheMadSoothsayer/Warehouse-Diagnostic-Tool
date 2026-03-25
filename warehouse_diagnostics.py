@@ -556,7 +556,7 @@ class WarehouseDiagnosticsApp(tk.Tk):
         # Instantiate scenario frame only on first open
         if key not in self._open_frames:
             wrapper  = ScrollableFrame(self._content)
-            scenario = ScenarioClass(wrapper.inner, log=self._log)
+            scenario = ScenarioClass(wrapper.inner, log=self._log, db=db)
             scenario.pack(fill="both", expand=True)
             self._open_frames[key] = wrapper
 

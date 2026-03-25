@@ -20,6 +20,7 @@ from common import (
     styled_label, styled_entry, styled_button, separator,
     LogPanel, ResultCard,
 )
+from db import Database
 
 import queries.query_replenishment_ineligible as q_ineligible
 
@@ -35,10 +36,11 @@ class ScenarioReplenishmentIneligible(tk.Frame):
     ICON         = "↑"
     ENVIRONMENTS = ["PROD", "QA"]
 
-    def __init__(self, parent, log: LogPanel, **kw):
+    def __init__(self, parent, log: LogPanel, db: Database, **kw):
         kw.setdefault("bg", PALETTE["surface"])
         super().__init__(parent, **kw)
         self._log          = log
+        self._db           = db
         self._result_cards = []
         self._build()
 
@@ -105,7 +107,7 @@ class ScenarioReplenishmentIneligible(tk.Frame):
         if not location:
             messagebox.showwarning("Input Required", "Please enter a pick face location.")
             return
-        if not db.connected:
+        if not self._db.connected:
             messagebox.showerror("Not Connected", "Please connect to a plant first.")
             return
 
@@ -142,7 +144,6 @@ class ScenarioReplenishmentIneligible(tk.Frame):
                 errors += 1
 
         total = len(results)
-        clean = total - issues_found - errors
 
         if errors:
             self._overall_lbl.config(
@@ -150,12 +151,9 @@ class ScenarioReplenishmentIneligible(tk.Frame):
                 fg=PALETTE["error"])
         elif issues_found:
             self._overall_lbl.config(
-                text=f"✘  {issues_found} of {total} check(s) found issues.  {clean} clean.",
+                text=f"✘  {issues_found} of {total} check(s) found issues.  {total - issues_found - errors} clean.",
                 fg=PALETTE["error"])
         else:
             self._overall_lbl.config(
                 text=f"✔  All {total} check(s) passed — no issues found.",
                 fg=PALETTE["success"])
-
-
-from db import db

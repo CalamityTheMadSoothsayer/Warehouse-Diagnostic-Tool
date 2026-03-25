@@ -21,6 +21,7 @@ from common import (
     styled_label, styled_button, separator,
     LogPanel, ResultCard,
 )
+from db import Database
 
 # ── All queries that contribute to this scenario ──────────────────────────────
 import queries.query_iws_delay_pending as q_iws_pending
@@ -37,10 +38,11 @@ class ScenarioIWSDelay(tk.Frame):
     ENVIRONMENTS = ["IWS"]
     ICON  = "⟳"
 
-    def __init__(self, parent, log: LogPanel, **kw):
+    def __init__(self, parent, log: LogPanel, db: Database, **kw):
         kw.setdefault("bg", PALETTE["surface"])
         super().__init__(parent, **kw)
         self._log          = log
+        self._db           = db
         self._result_cards = []
         self._build()
 
@@ -103,7 +105,7 @@ class ScenarioIWSDelay(tk.Frame):
             self._result_cards.append((qry, card))
 
     def _run(self):
-        if not db.connected:
+        if not self._db.connected:
             messagebox.showerror("Not Connected", "Please connect to the IWS DB server first.")
             return
 
@@ -140,7 +142,6 @@ class ScenarioIWSDelay(tk.Frame):
                 errors += 1
 
         total = len(results)
-        clean = total - issues_found - errors
 
         if errors:
             self._overall_lbl.config(
@@ -148,13 +149,9 @@ class ScenarioIWSDelay(tk.Frame):
                 fg=PALETTE["error"])
         elif issues_found:
             self._overall_lbl.config(
-                text=f"✘  {issues_found} of {total} check(s) found issues.  {clean} clean.",
+                text=f"✘  {issues_found} of {total} check(s) found issues.  {total - issues_found - errors} clean.",
                 fg=PALETTE["error"])
         else:
             self._overall_lbl.config(
                 text=f"✔  All {total} check(s) passed — no issues found.",
                 fg=PALETTE["success"])
-
-
-# late import avoids circular dependency
-from db import db

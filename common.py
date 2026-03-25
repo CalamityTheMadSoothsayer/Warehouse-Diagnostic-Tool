@@ -340,15 +340,15 @@ class ResultCard(tk.Frame):
 
     def set_result(self, result):
         if result.status == "error":
-            self._status_icon.config(text="X", fg=PALETTE["error"])
+            self._status_icon.config(text="✘", fg=PALETTE["error"])
             self._status_lbl.config(text=result.headline, fg=PALETTE["error"])
             self._data_box.pack_forget()
             self._grip.pack_forget()
             self._copy_btn.pack_forget()
             self._copy_sql_btn.pack_forget()
         elif result.status == "issues_found":
-            self._status_icon.config(text="X", fg=PALETTE["error"])
-            self._status_lbl.config(text=f"X  {result.headline}", fg=PALETTE["error"])
+            self._status_icon.config(text="✘", fg=PALETTE["error"])
+            self._status_lbl.config(text=f"✘  {result.headline}", fg=PALETTE["error"])
             self._data_box.config(state="normal")
             self._data_box.delete("1.0", "end")
             self._data_box.insert("end", "\n".join(result.data))
@@ -358,8 +358,8 @@ class ResultCard(tk.Frame):
             self._copy_btn.pack(side="right")
             self._copy_sql_btn.pack(side="right", padx=(4, 0))
         else:
-            self._status_icon.config(text="V", fg=PALETTE["success"])
-            self._status_lbl.config(text=f"V  {result.headline}", fg=PALETTE["success"])
+            self._status_icon.config(text="✔", fg=PALETTE["success"])
+            self._status_lbl.config(text=f"✔  {result.headline}", fg=PALETTE["success"])
             self._data_box.pack_forget()
             self._grip.pack_forget()
             self._copy_btn.pack_forget()

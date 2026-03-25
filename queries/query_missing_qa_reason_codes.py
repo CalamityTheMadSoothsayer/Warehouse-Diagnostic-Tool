@@ -18,26 +18,22 @@ DESCRIPTION = (
 )
 
 SQL = """
+    -- Branch 1: status record itself carries no reason code
     SELECT s.InventoryId
     FROM InventoryCasesQaStatuses s
-    OUTER APPLY (
-        SELECT TOP 1 r.qareasoncode
-        FROM InventoryCasesQaStatusReasons r
-        WHERE s.PlantCode   = r.PlantCode
-          AND s.InventoryId = r.InventoryId
-        ORDER BY r.createddate DESC
-    ) ur
-    WHERE s.QAReasonCode IS NULL
-      AND s.QAStatusCode  = 'HLD'
+    WHERE s.QAStatusCode  = 'HLD'
+      AND s.QAReasonCode IS NULL
 
+    UNION
 
-	UNION
-
-	SELECT s.InventoryId
-	FROM InventoryCasesQaStatuses s
-	LEFT JOIN InventoryCasesQaStatusReasons r ON s.InventoryId = r.InventoryId
-	WHERE s.QAStatusCode = 'HLD'
-	  AND r.QAReasonCode is NULL
+    -- Branch 2: no linked reason record exists at all
+    SELECT s.InventoryId
+    FROM InventoryCasesQaStatuses s
+    LEFT JOIN InventoryCasesQaStatusReasons r
+        ON  r.PlantCode   = s.PlantCode
+        AND r.InventoryId = s.InventoryId
+    WHERE s.QAStatusCode = 'HLD'
+      AND r.QAReasonCode IS NULL
 """
 
 

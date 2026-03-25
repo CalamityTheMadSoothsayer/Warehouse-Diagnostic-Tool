@@ -57,12 +57,12 @@ def run(delivery_number: str) -> QueryResult:
         result.status   = "issues_found"
         result.headline = f"{len(missing)} shipment(s) have no trailer assigned."
         result.data     = missing
-        result.add_message("error",   f"  X {result.headline}")
-        result.add_message("warning", f"    -> Shipment(s) missing trailer: {', '.join(missing)}")
+        result.add_message("error",   f"  ✘ {result.headline}")
+        result.add_message("warning", f"    → Shipment(s) missing trailer: {', '.join(missing)}")
         result.add_message("info",    "    Resolution: Assign a trailer to the shipment.")
     else:
         result.status   = "ok"
         result.headline = f"Trailer assigned: {', '.join(assigned)}"
-        result.add_message("success", f"  V {TITLE}: {result.headline}")
+        result.add_message("success", f"  ✔ {TITLE}: {result.headline}")
 
     return result
