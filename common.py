@@ -242,8 +242,8 @@ class ResultCard(tk.Frame):
     """
     Displays the outcome of a single query module inside a scenario.
     Shows title, description, status, a scrollable data box, and two copy buttons:
-      - Copy Data            -> copy data as plain text
-      - Copy Fromatted data  -> ('id1', 'id2', ...) formatted for SQL IN clauses
+      - Copy IDs       -> one ID per line, plain text
+      - Copy SQL List  -> ('id1', 'id2', ...) formatted for SQL IN clauses
     """
     def __init__(self, parent, title: str, description: str, **kw):
         kw.setdefault("bg", PALETTE["surface2"])
@@ -267,12 +267,12 @@ class ResultCard(tk.Frame):
 
         # Two copy buttons — right-aligned, hidden until results arrive
         self._copy_sql_btn = styled_button(
-            hdr, "Copy Formatted Data", self._copy_sql, accent=False, width=14)
+            hdr, "⎘  Copy SQL List", self._copy_sql, accent=False, width=14)
         self._copy_sql_btn.pack(side="right", padx=(4, 0))
         self._copy_sql_btn.pack_forget()
 
         self._copy_btn = styled_button(
-            hdr, "Copy Data", self._copy_ids, accent=False, width=10)
+            hdr, "⎘  Copy IDs", self._copy_ids, accent=False, width=10)
         self._copy_btn.pack(side="right")
         self._copy_btn.pack_forget()
 
@@ -291,17 +291,50 @@ class ResultCard(tk.Frame):
             font=FONT_SMALL, anchor="w", padx=10, pady=4)
         self._status_lbl.pack(fill="x")
 
-        # Data box
+        # Data box + resize grip
         self._data_box = scrolledtext.ScrolledText(
             self, height=4, state="disabled",
             bg=PALETTE["entry_bg"], fg=PALETTE["accent_text"],
             font=FONT_MONO, relief="flat", bd=0, wrap="word",
         )
 
+        # Resize grip — drag to change data box height
+        self._grip = tk.Frame(self, bg=PALETTE["border"], height=5, cursor="sb_v_double_arrow")
+        self._grip_active = False
+        self._grip_start_y = 0
+        self._grip_start_h = 4
+
+        def _grip_press(e):
+            self._grip_active = True
+            self._grip_start_y = e.y_root
+            self._grip_start_h = self._data_box.cget("height")
+            self._grip.bind_all("<Motion>",          _grip_drag)
+            self._grip.bind_all("<ButtonRelease-1>", _grip_release)
+
+        def _grip_drag(e):
+            if not self._grip_active:
+                return
+            delta_px  = e.y_root - self._grip_start_y
+            line_px   = self._data_box.tk.call("font", "metrics",
+                            str(self._data_box.cget("font")), "-linespace")
+            delta_lines = int(delta_px / max(int(line_px), 14))
+            new_h = max(2, self._grip_start_h + delta_lines)
+            self._data_box.config(height=new_h)
+
+        def _grip_release(e):
+            self._grip_active = False
+            self._grip.unbind_all("<Motion>")
+            self._grip.unbind_all("<ButtonRelease-1>")
+
+        self._grip.bind("<ButtonPress-1>", _grip_press)
+        self._grip.bind("<Enter>", lambda e: self._grip.config(bg=PALETTE["accent"]))
+        self._grip.bind("<Leave>", lambda e: self._grip.config(bg=PALETTE["border"]))
+
     def set_running(self):
         self._status_icon.config(text="○", fg=PALETTE["text_dim"])
         self._status_lbl.config(text="Running...", fg=PALETTE["text_dim"])
         self._data_box.pack_forget()
+        self._grip.pack_forget()
         self._copy_btn.pack_forget()
         self._copy_sql_btn.pack_forget()
 
@@ -310,6 +343,7 @@ class ResultCard(tk.Frame):
             self._status_icon.config(text="X", fg=PALETTE["error"])
             self._status_lbl.config(text=result.headline, fg=PALETTE["error"])
             self._data_box.pack_forget()
+            self._grip.pack_forget()
             self._copy_btn.pack_forget()
             self._copy_sql_btn.pack_forget()
         elif result.status == "issues_found":
@@ -319,13 +353,15 @@ class ResultCard(tk.Frame):
             self._data_box.delete("1.0", "end")
             self._data_box.insert("end", "\n".join(result.data))
             self._data_box.config(state="disabled")
-            self._data_box.pack(fill="x", padx=10, pady=(4, 6))
+            self._data_box.pack(fill="x", padx=10, pady=(4, 0))
+            self._grip.pack(fill="x", padx=10, pady=(0, 6))
             self._copy_btn.pack(side="right")
             self._copy_sql_btn.pack(side="right", padx=(4, 0))
         else:
             self._status_icon.config(text="V", fg=PALETTE["success"])
             self._status_lbl.config(text=f"V  {result.headline}", fg=PALETTE["success"])
             self._data_box.pack_forget()
+            self._grip.pack_forget()
             self._copy_btn.pack_forget()
             self._copy_sql_btn.pack_forget()
 
