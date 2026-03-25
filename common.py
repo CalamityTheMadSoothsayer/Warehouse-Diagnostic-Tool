@@ -3,7 +3,7 @@ common.py — Palette, shared widget helpers, QueryResult, and LogPanel.
 """
 
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, ttk
 import datetime
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -231,10 +231,6 @@ class ScrollableFrame(tk.Frame):
             self._canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
 
 
-# Need ttk for ScrollableFrame scrollbar
-from tkinter import ttk
-
-
 # ═══════════════════════════════════════════════════════════════════════════════
 #  RESULT CARD  — reusable card used by all scenario files
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -251,8 +247,6 @@ class ResultCard(tk.Frame):
         self._build(title, description)
 
     def _build(self, title, description):
-        from tkinter import scrolledtext
-
         # Card header
         hdr = tk.Frame(self, bg=PALETTE["surface2"], padx=10, pady=6)
         hdr.pack(fill="x")

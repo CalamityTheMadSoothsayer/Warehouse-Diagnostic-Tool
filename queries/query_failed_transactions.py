@@ -11,14 +11,9 @@ from db import db
 
 TITLE       = "Failed Transactions"
 DESCRIPTION = (
-    "Checks for all failed transactions in the masterstaging table for the given poster types:"
-    "InventoryAdjustment"
-    "OrderAcknowledgement"
-    "InventoryStatus"
-    "TrailerStatus"
-    "OrderDetailChange"
-    "ShipLoad"
-    "PorkHotCarcass"
+    "Checks for all failed transactions in the masterstaging table for the following poster types: "
+    "InventoryAdjustment, OrderAcknowledgement, InventoryStatus, TrailerStatus, "
+    "OrderDetailChange, ShipLoad, PorkHotCarcass."
 )
 
 SQL = """
@@ -54,6 +49,7 @@ def run() -> QueryResult:
     if not rows:
         result.status = "ok"
         result.headline = "No failed transactions found."
+        result.add_message("success", f"  ✔ {TITLE}: {result.headline}")
     else:
         result.status = "issues_found"
         result.headline = f"{len(rows)} failed transaction(s) found."

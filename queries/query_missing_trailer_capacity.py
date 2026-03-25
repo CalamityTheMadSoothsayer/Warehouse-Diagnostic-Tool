@@ -1,5 +1,5 @@
 """
-queries/query_missing_delivery_allocations.py
+queries/query_missing_trailer_capacity.py
 
 Cause   : Trailer attached to shipment has no trailer capacity assigned.
 Check   : Find trailer id assigned to the shipment and check if it has a trailer capacity value.

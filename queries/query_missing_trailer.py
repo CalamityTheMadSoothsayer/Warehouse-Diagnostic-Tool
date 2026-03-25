@@ -51,7 +51,7 @@ def run(delivery_number: str) -> QueryResult:
         return result
 
     missing  = [str(row[0]) for row in rows if not row[1]]
-    assigned = [f"{row[0]} -> {row[1]}" for row in rows if row[1]]
+    assigned = [f"{row[0]} → {row[1]}" for row in rows if row[1]]
 
     if missing:
         result.status   = "issues_found"
