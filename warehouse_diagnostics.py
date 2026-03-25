@@ -9,7 +9,7 @@ To add a new scenario
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 import threading
 import inspect
 
@@ -568,7 +568,8 @@ class WarehouseDiagnosticsApp(tk.Tk):
     def _close_tab(self, key):
         self._tab_bar.close_tab(key)
         if key in self._open_frames:
-            self._open_frames[key].pack_forget()
+            self._open_frames[key].destroy()
+            del self._open_frames[key]
         # Show whichever tab is now active, if any
         active = self._tab_bar.active_key
         if active:
@@ -622,10 +623,10 @@ class WarehouseDiagnosticsApp(tk.Tk):
             self._refresh_sidebar_visibility(p.environment.upper())
         else:
             self._topbar_plant.config(text="", fg=PALETTE["text_dim"])
-            # Close all open tabs on disconnect
+            # Close all open tabs and destroy their frames on disconnect
             for key in list(self._open_frames.keys()):
                 self._tab_bar.close_tab(key)
-                self._open_frames[key].pack_forget()
+                self._open_frames[key].destroy()
             self._open_frames.clear()
             self._set_sidebar_active(None)
             # Hide all scenario buttons when disconnected

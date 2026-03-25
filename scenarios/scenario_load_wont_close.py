@@ -28,10 +28,10 @@ import queries.query_missing_trailer_capacity as q_missing_trailer_capacity
 import queries.query_missing_trailer as q_missing_trailer
 
 QUERIES = [
-    q_missing_alloc,
     q_missing_shipment,
-    q_missing_trailer_capacity,
     q_missing_trailer,
+    q_missing_trailer_capacity,
+    q_missing_alloc,
     # Add future query modules here
 ]
 

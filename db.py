@@ -28,7 +28,7 @@ class Plant:
     code:        str
     server:      str
     database:    str
-    environment: str   # "production" | "staging" | "dev"
+    environment: str   # "PROD" | "QA" | "IWS"
     notes:       str
 
 

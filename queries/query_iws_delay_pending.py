@@ -45,7 +45,7 @@ def run() -> QueryResult:
 
     total = sum(row[1] for row in rows)
 
-    # Format each row as "MessageName: 42" for display
+    # Always populate data so the breakdown is visible in the result card
     result.data = [f"{row[0]}: {row[1]}" for row in rows]
 
     if total >= PENDING_THRESHOLD:
@@ -57,5 +57,8 @@ def run() -> QueryResult:
         result.status   = "ok"
         result.headline = f"{total} total pending message(s) today — below threshold of {PENDING_THRESHOLD}."
         result.add_message("success", f"  ✔ {TITLE}: {result.headline}")
+        if rows:
+            for row in rows:
+                result.add_message("info", f"    {row[0]}: {row[1]}")
 
     return result

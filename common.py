@@ -354,10 +354,20 @@ class ResultCard(tk.Frame):
         else:
             self._status_icon.config(text="✔", fg=PALETTE["success"])
             self._status_lbl.config(text=f"✔  {result.headline}", fg=PALETTE["success"])
-            self._data_box.pack_forget()
-            self._grip.pack_forget()
-            self._copy_btn.pack_forget()
-            self._copy_sql_btn.pack_forget()
+            if result.data:
+                self._data_box.config(state="normal")
+                self._data_box.delete("1.0", "end")
+                self._data_box.insert("end", "\n".join(result.data))
+                self._data_box.config(state="disabled")
+                self._data_box.pack(fill="x", padx=10, pady=(4, 0))
+                self._grip.pack(fill="x", padx=10, pady=(0, 6))
+                self._copy_btn.pack(side="right")
+                self._copy_sql_btn.pack(side="right", padx=(4, 0))
+            else:
+                self._data_box.pack_forget()
+                self._grip.pack_forget()
+                self._copy_btn.pack_forget()
+                self._copy_sql_btn.pack_forget()
 
     def _get_ids(self) -> list:
         self._data_box.config(state="normal")
