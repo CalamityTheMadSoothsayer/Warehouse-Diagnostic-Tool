@@ -43,11 +43,10 @@ def run(delivery_number: str) -> QueryResult:
     result.data = rows
 
     if rows:
-        id_list         = ", ".join(rows)
         result.status   = "issues_found"
-        result.headline = f"Trailer capacity missing for trailer ID: {id_list}"
+        result.headline = f"{len(rows)} trailer(s) have no capacity assigned."
         result.add_message("error",   f"  ✘ {result.headline}")
-        result.add_message("warning", f"    → {len(rows)} trailer ID(s) lack trailer capacity.")
+        result.add_message("warning", f"    → Trailer ID(s): {', '.join(rows)}")
         result.add_message("info",    "    Resolution: Assign a trailer capacity to the trailer.")
     else:
         result.status   = "ok"

@@ -49,7 +49,7 @@ def load_plants() -> tuple[list[Plant], str]:
                 code        = entry.get("code",        "???"),
                 server      = entry.get("server",      ""),
                 database    = entry.get("database",    ""),
-                environment = entry.get("environment", "production"),
+                environment = entry.get("environment", "PROD"),
                 notes       = entry.get("notes",       ""),
             ))
         if not plants:

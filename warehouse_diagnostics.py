@@ -647,6 +647,7 @@ class WarehouseDiagnosticsApp(tk.Tk):
                 if sc in self._open_frames:
                     self._tab_bar.close_tab(sc)
                     self._open_frames[sc].pack_forget()
+        self._update_overlay()
 
     def _on_search_change(self, *_):
         """Re-filter sidebar when search term changes."""

@@ -10,7 +10,7 @@ Returns : QueryResult
 from common import QueryResult
 from db import db
 
-TITLE       = "Fix Script. Delete Duplicate DeliveryAllocations"
+TITLE       = "Fix Script — Delete Duplicate DeliveryAllocations"
 DESCRIPTION = (
     "Generates a SQL DELETE script to remove DeliveryAllocations records "
     "linked to duplicate inventory. Copy the script and run it in SSMS."

@@ -55,11 +55,10 @@ def run() -> QueryResult:
     result.data = rows
 
     if rows:
-        id_list         = ", ".join(rows)
         result.status   = "issues_found"
-        result.headline = f"Missing QA reason codes for: {id_list}"
+        result.headline = f"{len(rows)} inventory ID(s) are on hold with no QA reason code."
         result.add_message("error",   f"  ✘ {result.headline}")
-        result.add_message("warning", f"    → {len(rows)} inventory ID(s) are on hold with no reason code.")
+        result.add_message("warning", f"    → IDs: {', '.join(rows)}")
         result.add_message("info",    "    Resolution: Assign QA reason codes to the affected inventory.")
     else:
         result.status   = "ok"
