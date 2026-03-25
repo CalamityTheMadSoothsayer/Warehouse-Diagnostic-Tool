@@ -25,14 +25,12 @@ import queries.query_duplicate_inventory_detect        as q_detect
 import queries.query_duplicate_inventory_fix_cases     as q_fix_cases
 import queries.query_duplicate_inventory_fix_allocations  as q_fix_alloc
 import queries.query_duplicate_inventory_fix_qa_statuses  as q_fix_qa
-import queries.query_duplicate_negative_one as q_negative_one
 
 QUERIES = [
     q_detect,
     q_fix_cases,
     q_fix_alloc,
     q_fix_qa,
-    q_negative_one,
 ]
 
 
