@@ -521,7 +521,7 @@ class WarehouseDiagnosticsApp(tk.Tk):
                 font=FONT_SMALL, anchor="w",
                 command=lambda sc=ScenarioClass: self._toggle_scenario(sc),
             )
-            btn.pack(fill="x")
+            # Do NOT pack here — _refresh_sidebar_visibility controls visibility
             self._sidebar_btns[ScenarioClass] = btn
 
         # Boot — hide all scenario buttons until a plant is connected
