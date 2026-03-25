@@ -133,16 +133,21 @@ class ScenarioDuplicateInventory(tk.Frame):
     def _post_run(self, results):
         self._run_btn.config(state="normal", text="▶  Run All Checks")
 
-        issues_found = 0
-        errors       = 0
+        duplicates_found = False
+        scripts_generated = 0
+        errors            = 0
 
-        for _, card, result in results:
+        for i, (_, card, result) in enumerate(results):
             self._log.flush_query_result(result)
             card.set_result(result)
-            if result.status == "issues_found":
-                issues_found += 1
-            elif result.status == "error":
+            if result.status == "error":
                 errors += 1
+            elif result.status == "issues_found":
+                if i == 0:
+                    # First card is the detection query, not a fix script
+                    duplicates_found = True
+                else:
+                    scripts_generated += 1
 
         total = len(results)
 
@@ -150,9 +155,9 @@ class ScenarioDuplicateInventory(tk.Frame):
             self._overall_lbl.config(
                 text=f"✘  {errors} check(s) failed with errors.",
                 fg=PALETTE["error"])
-        elif issues_found:
+        elif duplicates_found:
             self._overall_lbl.config(
-                text=f"✘  Duplicates found. {issues_found} script(s) generated — copy each and run in SSMS.",
+                text=f"✘  Duplicates found. {scripts_generated} fix script(s) generated — copy each and run in SSMS.",
                 fg=PALETTE["warning"])
         else:
             self._overall_lbl.config(

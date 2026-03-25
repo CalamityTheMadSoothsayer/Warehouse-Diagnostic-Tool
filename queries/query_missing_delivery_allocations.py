@@ -49,11 +49,10 @@ def run(delivery_number: str) -> QueryResult:
     result.data = rows
 
     if rows:
-        id_list         = ", ".join(rows)
         result.status   = "issues_found"
-        result.headline = f"Delivery Allocations missing for: {id_list}"
+        result.headline = f"{len(rows)} inventory ID(s) are missing deliveryallocations records."
         result.add_message("error",   f"  ✘ {result.headline}")
-        result.add_message("warning", f"    → {len(rows)} inventory ID(s) lack deliveryallocations records.")
+        result.add_message("warning", f"    → IDs: {', '.join(rows)}")
         result.add_message("info",    "    Resolution: Recreate the missing deliveryallocations rows.")
     else:
         result.status   = "ok"
