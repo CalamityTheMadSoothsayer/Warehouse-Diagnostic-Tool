@@ -524,7 +524,8 @@ class WarehouseDiagnosticsApp(tk.Tk):
             btn.pack(fill="x")
             self._sidebar_btns[ScenarioClass] = btn
 
-        # Boot
+        # Boot — hide all scenario buttons until a plant is connected
+        self._refresh_sidebar_visibility(None)
         self._update_overlay()
         self._log.banner("Warehouse Diagnostics — Ready")
         self._log.info("Select a plant and connect using the left panel.")
