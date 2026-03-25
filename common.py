@@ -242,8 +242,8 @@ class ResultCard(tk.Frame):
     """
     Displays the outcome of a single query module inside a scenario.
     Shows title, description, status, a scrollable data box, and two copy buttons:
-      - Copy IDs       -> one ID per line, plain text
-      - Copy SQL List  -> ('id1', 'id2', ...) formatted for SQL IN clauses
+      - Copy Data           -> one entry per line, plain text
+      - Copy Formatted Data -> ('id1', 'id2', ...) formatted for SQL IN clauses
     """
     def __init__(self, parent, title: str, description: str, **kw):
         kw.setdefault("bg", PALETTE["surface2"])
@@ -267,12 +267,12 @@ class ResultCard(tk.Frame):
 
         # Two copy buttons — right-aligned, hidden until results arrive
         self._copy_sql_btn = styled_button(
-            hdr, "⎘  Copy SQL List", self._copy_sql, accent=False, width=14)
+            hdr, "Copy Formatted Data", self._copy_sql, accent=False, width=14)
         self._copy_sql_btn.pack(side="right", padx=(4, 0))
         self._copy_sql_btn.pack_forget()
 
         self._copy_btn = styled_button(
-            hdr, "⎘  Copy IDs", self._copy_ids, accent=False, width=10)
+            hdr, "Copy Data", self._copy_ids, accent=False, width=10)
         self._copy_btn.pack(side="right")
         self._copy_btn.pack_forget()
 
@@ -376,7 +376,7 @@ class ResultCard(tk.Frame):
         self.clipboard_clear()
         self.clipboard_append("\n".join(ids))
         self._copy_btn.config(text="Copied!")
-        self.after(1800, lambda: self._copy_btn.config(text="Copy IDs"))
+        self.after(1800, lambda: self._copy_btn.config(text="Copy Data"))
 
     def _copy_sql(self):
         ids = self._get_ids()
@@ -384,4 +384,4 @@ class ResultCard(tk.Frame):
         self.clipboard_clear()
         self.clipboard_append(formatted)
         self._copy_sql_btn.config(text="Copied!")
-        self.after(1800, lambda: self._copy_sql_btn.config(text="Copy SQL List"))
+        self.after(1800, lambda: self._copy_sql_btn.config(text="Copy Formatted Data"))
