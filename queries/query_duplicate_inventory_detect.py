@@ -2,8 +2,11 @@
 queries/query_duplicate_inventory_detect.py
 
 Cause   : Duplicate inventory records exist for the same barcode.
-Check   : Finds barcodes with more than one InventoryCase record in an
-          active warehouse location. Returns a summary of each duplicate.
+Check   : Finds barcodes with more than one InventoryCase record where at
+          least one is in an active warehouse location.
+          Window functions run across ALL locations (including SHIPPED) so
+          that barcodes with one shipped and one active copy are caught.
+          The outer WHERE then excludes the excluded locations from the results.
 Returns : QueryResult
 """
 
@@ -13,10 +16,10 @@ from db import db
 TITLE       = "Duplicate Inventory Detection"
 DESCRIPTION = (
     "Finds barcodes with more than one active InventoryCase record. "
-    "Excludes SHIPPED, SHIPRTN, ADJUST, and LVADJ locations."
+    "Excludes SHIPPED, SHIPRTN, ADJUST, and LVADJ from results but counts "
+    "them when detecting duplicates."
 )
 
-# Drop temp table if it exists from a previous run, then populate it
 SQL_BUILD = """
     IF OBJECT_ID('tempdb..#MaxInvID') IS NOT NULL DROP TABLE #MaxInvID;
 
@@ -25,7 +28,7 @@ SQL_BUILD = """
             SELECT TOP 1 ic2.warehouselocationid
             FROM InventoryCases ic2 WITH (READUNCOMMITTED)
             WHERE ic2.inventoryid = x.maxinvid
-        )                                   AS maxloc,
+        )                   AS maxloc,
         x.cnt,
         x.maxinvid,
         x.toploc,
@@ -45,20 +48,36 @@ SQL_BUILD = """
         x.ModifiedDate
     INTO #MaxInvID
     FROM (
+        -- Window functions run over ALL records including SHIPPED/LVADJ so
+        -- that barcodes with one shipped and one active copy are counted correctly
         SELECT
-            COUNT(1) OVER (PARTITION BY ic.barcode)              AS cnt,
-            MAX(ic.inventoryid) OVER (PARTITION BY ic.barcode)   AS maxinvid,
-            MAX(ic.WarehouseLocationId) OVER (PARTITION BY ic.barcode) AS toploc,
-            MIN(ic.WarehouseLocationId) OVER (PARTITION BY ic.barcode) AS botloc,
-            ic.*
+            COUNT(1) OVER (PARTITION BY ic.barcode)                         AS cnt,
+            MAX(ic.inventoryid) OVER (PARTITION BY ic.barcode)              AS maxinvid,
+            MAX(ic.WarehouseLocationId) OVER (PARTITION BY ic.barcode)      AS toploc,
+            MIN(ic.WarehouseLocationId) OVER (PARTITION BY ic.barcode)      AS botloc,
+            ic.PlantCode,
+            ic.InventoryId,
+            ic.ProductId,
+            ic.Barcode,
+            ic.BatchNumber,
+            ic.PalletNumber,
+            ic.Weight,
+            ic.ProductionDate,
+            ic.WarehouseLocationId,
+            ic.CreatedBy,
+            ic.CreatedDate,
+            ic.ModifiedBy,
+            ic.ModifiedDate
         FROM InventoryCases ic WITH (READUNCOMMITTED)
-        JOIN WarehouseAreaLocations wal WITH (READUNCOMMITTED)
-            ON wal.LocationId = ic.WarehouseLocationId
-        JOIN WarehouseAreas wa WITH (READUNCOMMITTED)
-            ON  wa.WarehouseId  = wal.WarehouseId
-            AND wa.AreaId       = wal.AreaId
-            AND wa.IsAvailable  = 1
     ) x
+    JOIN WarehouseAreaLocations wal WITH (READUNCOMMITTED)
+        ON wal.LocationId = x.WarehouseLocationId
+    JOIN WarehouseAreas wa WITH (READUNCOMMITTED)
+        ON  wa.WarehouseId = wal.WarehouseId
+        AND wa.AreaId      = wal.AreaId
+        AND wa.IsAvailable = 1
+    -- Exclusion is in the outer WHERE, not inside the subquery,
+    -- so the window functions above see all records first
     WHERE x.cnt > 1
       AND x.WarehouseLocationId NOT IN ('SHIPPED','SHIPRTN','ADJUST','LVADJ')
 """
