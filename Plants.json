@@ -1,1 +1,28 @@
-
+{
+  "plants": [
+    {
+      "name": "Sioux Falls Plant",
+      "code": "SF01",
+      "server": "SXFLS-SQL-PROD01",
+      "database": "WarehouseDB",
+      "environment": "PROD",
+      "notes": "Production environment. Confirm before connecting."
+    },
+    {
+      "name": "Sioux Falls QA",
+      "code": "SF01-QA",
+      "server": "SXFLS-SQL-QA01",
+      "database": "WarehouseDB_QA",
+      "environment": "QA",
+      "notes": ""
+    },
+    {
+      "name": "Sioux Falls IWS",
+      "code": "SF01-IWS",
+      "server": "SXFLS-IWS-SQL01",
+      "database": "IWS_Messaging",
+      "environment": "IWS",
+      "notes": "Use for IWS Message Delay scenario only."
+    }
+  ]
+}
