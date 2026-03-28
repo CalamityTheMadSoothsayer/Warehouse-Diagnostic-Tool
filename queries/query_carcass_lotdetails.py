@@ -31,7 +31,7 @@ def run(schedulegroup: str) -> QueryResult:
 
     try:
         cursor = db.conn.cursor()
-        if db.cancelled:
+        if getattr(db, "cancelled", False):
             result.status = "error"
             result.headline = "Query cancelled — disconnected."
             return result
