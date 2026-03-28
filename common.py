@@ -95,11 +95,13 @@ class QueryResult:
     data     : list  — raw rows returned by the query (strings)
     """
     def __init__(self):
-        self.success  : bool             = True
-        self.status   : str              = "ok"
-        self.headline : str              = ""
-        self.messages : list[tuple]      = []
-        self.data     : list[str]        = []
+        self.success   : bool        = True
+        self.status    : str         = "ok"
+        self.headline  : str         = ""
+        self.messages  : list[tuple] = []
+        self.data      : list[str]   = []
+        self.extracted : dict        = {}   # intermediate values for chained queries
+        self.sql       : str         = ""   # SQL executed; surfaced via Copy Query
 
     def add_message(self, level: str, text: str):
         self.messages.append((level, text))
@@ -237,9 +239,10 @@ class ScrollableFrame(tk.Frame):
 class ResultCard(tk.Frame):
     """
     Displays the outcome of a single query module inside a scenario.
-    Shows title, description, status, a scrollable data box, and two copy buttons:
+    Shows title, description, status, a scrollable data box, and copy buttons:
       - Copy Data           -> one entry per line, plain text
       - Copy Formatted Data -> ('id1', 'id2', ...) formatted for SQL IN clauses
+      - Copy Query          -> the SQL that was executed (shown when result.sql is set)
     """
     def __init__(self, parent, title: str, description: str, **kw):
         kw.setdefault("bg", PALETTE["surface2"])
@@ -259,7 +262,7 @@ class ResultCard(tk.Frame):
         tk.Label(hdr, text=title, bg=PALETTE["surface2"],
                  fg=PALETTE["text"], font=FONT_HEAD).pack(side="left")
 
-        # Two copy buttons — right-aligned, hidden until results arrive
+        # Copy buttons — right-aligned, hidden until results arrive
         self._copy_sql_btn = styled_button(
             hdr, "Copy Formatted Data", self._copy_sql, accent=False, width=14)
         self._copy_sql_btn.pack(side="right", padx=(4, 0))
@@ -269,6 +272,12 @@ class ResultCard(tk.Frame):
             hdr, "Copy Data", self._copy_ids, accent=False, width=10)
         self._copy_btn.pack(side="right")
         self._copy_btn.pack_forget()
+
+        self._copy_query_btn = styled_button(
+            hdr, "Copy Query", self._copy_query, accent=False, width=10)
+        self._copy_query_btn.pack(side="right", padx=(0, 4))
+        self._copy_query_btn.pack_forget()
+        self._sql: str = ""
 
         # Description
         tk.Label(self, text=description, bg=PALETTE["surface2"],
@@ -324,6 +333,12 @@ class ResultCard(tk.Frame):
         self._grip.bind("<Enter>", lambda e: self._grip.config(bg=PALETTE["accent"]))
         self._grip.bind("<Leave>", lambda e: self._grip.config(bg=PALETTE["border"]))
 
+    def _show_query_btn(self, sql: str):
+        """Store the SQL and show the Copy Query button."""
+        self._sql = sql
+        if sql:
+            self._copy_query_btn.pack(side="right", padx=(0, 4))
+
     def set_running(self):
         self._status_icon.config(text="○", fg=PALETTE["text_dim"])
         self._status_lbl.config(text="Running...", fg=PALETTE["text_dim"])
@@ -331,8 +346,22 @@ class ResultCard(tk.Frame):
         self._grip.pack_forget()
         self._copy_btn.pack_forget()
         self._copy_sql_btn.pack_forget()
+        self._copy_query_btn.pack_forget()
+
+    def set_skipped(self, reason: str = "Skipped"):
+        """Show a neutral skipped state — used when a prerequisite query failed."""
+        self._status_icon.config(text="—", fg=PALETTE["text_dim"])
+        self._status_lbl.config(text=f"—  {reason}", fg=PALETTE["text_dim"])
+        self._data_box.pack_forget()
+        self._grip.pack_forget()
+        self._copy_btn.pack_forget()
+        self._copy_sql_btn.pack_forget()
+        self._copy_query_btn.pack_forget()
 
     def set_result(self, result):
+        if result.sql:
+            self._show_query_btn(result.sql)
+
         if result.status == "error":
             self._status_icon.config(text="✘", fg=PALETTE["error"])
             self._status_lbl.config(text=result.headline, fg=PALETTE["error"])
@@ -381,6 +410,12 @@ class ResultCard(tk.Frame):
         self.clipboard_append("\n".join(ids))
         self._copy_btn.config(text="Copied!")
         self.after(1800, lambda: self._copy_btn.config(text="Copy Data"))
+
+    def _copy_query(self):
+        self.clipboard_clear()
+        self.clipboard_append(self._sql)
+        self._copy_query_btn.config(text="Copied!")
+        self.after(1800, lambda: self._copy_query_btn.config(text="Copy Query"))
 
     def _copy_sql(self):
         ids = self._get_ids()
