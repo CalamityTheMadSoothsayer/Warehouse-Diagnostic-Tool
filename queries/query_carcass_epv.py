@@ -29,11 +29,15 @@ SQL = """
 
 def run(carcass_id: str) -> QueryResult:
     result = QueryResult()
-    result.sql = SQL.strip()
+    result.sql = SQL.strip().replace("?", f"'{carcass_id}'")
     result.add_message("info", f"[{TITLE}] Looking up CarcassId: {carcass_id}")
 
     try:
         cursor = db.conn.cursor()
+        if db.cancelled:
+            result.status = "error"
+            result.headline = "Query cancelled — disconnected."
+            return result
         cursor.execute(SQL, carcass_id)
         row = cursor.fetchone()
         cols = [col[0] for col in cursor.description]
