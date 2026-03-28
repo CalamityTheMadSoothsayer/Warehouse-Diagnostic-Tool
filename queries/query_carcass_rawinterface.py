@@ -23,6 +23,7 @@ SQL = """
         Data
     FROM RawInterfaceData
     WHERE Data LIKE '%' + ? + '%'
+    AND serviceid = 'EPVService'
     ORDER BY MessageId
 """
 
