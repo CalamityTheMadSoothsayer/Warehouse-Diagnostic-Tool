@@ -26,11 +26,15 @@ SQL = """
 
 def run(schedulegroup: str) -> QueryResult:
     result = QueryResult()
-    result.sql = SQL.strip()
+    result.sql = SQL.strip().replace("?", f"'{schedulegroup}'")
     result.add_message("info", f"[{TITLE}] Looking up ScheduleGroup: {schedulegroup}")
 
     try:
         cursor = db.conn.cursor()
+        if db.cancelled:
+            result.status = "error"
+            result.headline = "Query cancelled — disconnected."
+            return result
         cursor.execute(SQL, schedulegroup)
         row = cursor.fetchone()
         cols = [col[0] for col in cursor.description]
