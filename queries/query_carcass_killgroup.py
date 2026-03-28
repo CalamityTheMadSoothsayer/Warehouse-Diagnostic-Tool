@@ -22,17 +22,21 @@ SQL = """
         PurchaseGroup,
         HeadCount
     FROM KillGroups
-    WHERE KillGroupNo = ?
+    WHERE KillGroupId = ?
 """
 
 
 def run(killgroup_id: str) -> QueryResult:
     result = QueryResult()
     result.sql = SQL.strip().replace("?", f"'{killgroup_id}'")
-    result.add_message("info", f"[{TITLE}] Looking up KillGroupNo: {killgroup_id}")
+    result.add_message("info", f"[{TITLE}] Looking up KillGroupId: {killgroup_id}")
 
     try:
         cursor = db.conn.cursor()
+        if db.cancelled:
+            result.status = "error"
+            result.headline = "Query cancelled — disconnected."
+            return result
         cursor.execute(SQL, killgroup_id)
         row = cursor.fetchone()
         cols = [col[0] for col in cursor.description]
@@ -45,7 +49,7 @@ def run(killgroup_id: str) -> QueryResult:
 
     if not row:
         result.status   = "issues_found"
-        result.headline = f"No Kill Group record found for KillGroupNo: {killgroup_id}"
+        result.headline = f"No Kill Group record found for KillGroupId: {killgroup_id}"
         result.add_message("error", f"  ✘ {result.headline}")
         return result
 
