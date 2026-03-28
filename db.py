@@ -76,6 +76,7 @@ class Database:
                 f"SERVER={plant.server};"
                 f"DATABASE={plant.database};"
                 f"Trusted_Connection=yes;"
+                f"MARS_Connection=yes;"
             )
             self.conn = pyodbc.connect(conn_str, timeout=10)
             self.active_plant = plant
