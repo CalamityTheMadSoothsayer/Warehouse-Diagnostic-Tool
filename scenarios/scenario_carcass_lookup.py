@@ -18,7 +18,6 @@ Query chain:
 
 import tkinter as tk
 from tkinter import messagebox
-import threading
 
 from common import (
     PALETTE, FONT_SMALL, FONT_TITLE, FONT_HEAD,
@@ -140,90 +139,101 @@ class ScenarioCarcassLookup(tk.Frame):
 
         self._log.banner(f"Carcass Lookup — {carcass_id}")
 
-        def do():
-            results = []
+        # ── Shared state for parallel threads ────────────────────────────
+        import threading as _threading
 
-            # ── Step 1: BackTagCarcasses (gate) ───────────────────────────
+        total_queries  = len(QUERIES)
+        completed      = [0]           # mutable counter
+        results_store  = {}            # qry → QueryResult
+        lock           = _threading.Lock()
+        gate_failed    = [False]
+
+        def _finish_one(qry, result):
+            """Called from each worker thread when its query returns."""
+            with lock:
+                results_store[qry] = result
+                completed[0] += 1
+                done = completed[0]
+
+            # Update this card immediately on the main thread
+            self.after(0, lambda q=qry, r=result: self._apply_result(q, r))
+
+            # Update progress label
+            self.after(0, lambda d=done: self._overall_lbl.config(
+                text=f"Looking up... ({d} of {total_queries} complete)",
+                fg=PALETTE["text_dim"]))
+
+            # When all threads are done, show the final summary
+            if done == total_queries:
+                self.after(0, lambda: self._finish(results_store, gate_failed[0]))
+
+        def run_chain():
+            """BackTag → KillGroup → LotDetails (must be sequential)."""
             bt_result = q_backtag.run(carcass_id)
-            results.append((q_backtag, bt_result))
+            _finish_one(q_backtag, bt_result)
 
             if bt_result.status in ("error", "issues_found"):
-                # Gate failed — skip the kill group chain
+                gate_failed[0] = True
                 for qry in [q_killgroup, q_lotdetails]:
-                    skip = _make_skipped()
-                    results.append((qry, skip))
-
-                # Run independent queries regardless
-                hot_result = q_hot.run(carcass_id)
-                results.append((q_hot, hot_result))
-
-                epv_result = q_epv.run(carcass_id)
-                results.append((q_epv, epv_result))
-
-                raw_result = q_rawinterface.run(carcass_id)
-                results.append((q_rawinterface, raw_result))
-
-                self.after(0, lambda r=results: self._post_run(r, gate_failed=True))
+                    _finish_one(qry, _make_skipped())
                 return
 
             killgroupid = bt_result.extracted.get("killgroupid", "")
 
-            # ── Step 2: HotCarcasses (independent) ───────────────────────
-            hot_result = q_hot.run(carcass_id)
-            results.append((q_hot, hot_result))
-
-            # ── Step 3: KillGroups ────────────────────────────────────────
             kg_result = q_killgroup.run(killgroupid)
-            results.append((q_killgroup, kg_result))
+            _finish_one(q_killgroup, kg_result)
 
             schedulegroup = kg_result.extracted.get("schedulegroup", "")
-
-            # ── Step 4: LotDetails ────────────────────────────────────────
             if schedulegroup:
                 ld_result = q_lotdetails.run(schedulegroup)
             else:
                 ld_result = _make_skipped("Skipped — no schedule group from Kill Group")
-            results.append((q_lotdetails, ld_result))
+            _finish_one(q_lotdetails, ld_result)
 
-            # ── Step 5: EPV (independent) ─────────────────────────────────
-            epv_result = q_epv.run(carcass_id)
-            results.append((q_epv, epv_result))
+        def run_hot():
+            _finish_one(q_hot, q_hot.run(carcass_id))
 
-            # ── Step 6: RawInterfaceData (independent) ────────────────────
-            raw_result = q_rawinterface.run(carcass_id)
-            results.append((q_rawinterface, raw_result))
+        def run_epv():
+            _finish_one(q_epv, q_epv.run(carcass_id))
 
-            self.after(0, lambda r=results: self._post_run(r, gate_failed=False))
+        def run_raw():
+            # Warn the user before starting — this is a full table scan
+            self.after(0, lambda: self._overall_lbl.config(
+                text="Scanning RawInterfaceData (this may take a moment)...",
+                fg=PALETTE["text_dim"]))
+            _finish_one(q_rawinterface, q_rawinterface.run(carcass_id))
 
-        threading.Thread(target=do, daemon=True).start()
+        for target in (run_chain, run_hot, run_epv, run_raw):
+            _threading.Thread(target=target, daemon=True).start()
 
-    def _post_run(self, results: list, gate_failed: bool):
+    def _apply_result(self, qry, result):
+        """Update a single result card on the main thread."""
+        card = self._cards[qry]
+        self._log.flush_query_result(result)
+        if result.status == "_skipped":
+            card.set_skipped(result.headline)
+        else:
+            card.set_result(result)
+
+    def _finish(self, results_store: dict, gate_failed: bool):
+        """Called once all threads have completed — show final summary."""
         self._run_btn.config(state="normal", text="▶  Look Up")
 
-        errors        = 0
-        issues        = 0
-        skipped_count = 0
-
-        for qry, result in results:
-            card = self._cards[qry]
-            self._log.flush_query_result(result)
-
+        errors = issues = skipped = 0
+        for result in results_store.values():
             if result.status == "_skipped":
-                card.set_skipped(result.headline)
-                skipped_count += 1
-            else:
-                card.set_result(result)
-                if result.status == "error":
-                    errors += 1
-                elif result.status == "issues_found":
-                    issues += 1
+                skipped += 1
+            elif result.status == "error":
+                errors += 1
+            elif result.status == "issues_found":
+                issues += 1
 
-        ran   = len(results) - skipped_count
+        ran   = len(results_store) - skipped
         clean = ran - issues - errors
 
         if gate_failed:
             self._overall_lbl.config(
-                text=f"✘  No BackTag record found — remaining queries skipped.",
+                text="✘  No BackTag record found — kill group chain skipped.",
                 fg=PALETTE["error"])
         elif errors:
             self._overall_lbl.config(
