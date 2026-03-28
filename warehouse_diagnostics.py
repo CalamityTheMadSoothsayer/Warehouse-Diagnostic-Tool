@@ -28,6 +28,7 @@ from scenarios.scenario_replenishment_check import ScenarioReplenishmentIneligib
 from scenarios.scenario_duplicate_inventory import ScenarioDuplicateInventory
 from scenarios.scenario_missing_carcasses import ScenarioMissingCarcasses
 from scenarios.scenario_failed_transactions import ScenarioFailedTransactions
+from scenarios.scenario_carcass_lookup import ScenarioCarcassLookup
 
 SCENARIOS = [
     ScenarioLoadWontClose,
@@ -37,6 +38,7 @@ SCENARIOS = [
     ScenarioDuplicateInventory,
     ScenarioMissingCarcasses,
     ScenarioFailedTransactions,
+    ScenarioCarcassLookup,
     # Add future scenario classes here
 ]
 
