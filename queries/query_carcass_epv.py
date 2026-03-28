@@ -21,7 +21,7 @@ SQL = """
         QualityProgram,
         ApprovedBy,
         ApprovedDate,
-        CpsTransfer
+        CpsTransferStatus
     FROM EpVCarcasses
     WHERE CarcassId = ?
 """
