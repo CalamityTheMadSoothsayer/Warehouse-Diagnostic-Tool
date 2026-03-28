@@ -35,6 +35,10 @@ def run(carcass_id: str) -> QueryResult:
 
     try:
         cursor = db.conn.cursor()
+        if db.cancelled:
+            result.status = "error"
+            result.headline = "Query cancelled — disconnected."
+            return result
         cursor.execute(SQL, carcass_id)
         row = cursor.fetchone()
         cols = [col[0] for col in cursor.description]
