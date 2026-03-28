@@ -66,6 +66,7 @@ class Database:
     def __init__(self):
         self.conn          = None
         self.active_plant: Plant | None = None
+        self.cancelled     = False   # set True on disconnect to abort running queries
 
     def connect(self, plant: Plant) -> tuple[bool, str]:
         if not PYODBC_AVAILABLE:
@@ -78,6 +79,7 @@ class Database:
                 f"Trusted_Connection=yes;"
                 f"MARS_Connection=yes;"
             )
+            self.cancelled = False
             self.conn = pyodbc.connect(conn_str, timeout=10)
             self.active_plant = plant
             return True, "Connected successfully."
@@ -87,6 +89,7 @@ class Database:
             return False, str(exc)
 
     def disconnect(self):
+        self.cancelled = True   # signal all running queries to abort
         if self.conn:
             try:
                 self.conn.close()
