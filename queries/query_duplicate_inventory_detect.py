@@ -23,63 +23,74 @@ DESCRIPTION = (
 SQL_BUILD = """
     IF OBJECT_ID('tempdb..#MaxInvID') IS NOT NULL DROP TABLE #MaxInvID;
 
-    SELECT
-        (
-            SELECT TOP 1 ic2.warehouselocationid
-            FROM InventoryCases ic2 WITH (READUNCOMMITTED)
-            WHERE ic2.inventoryid = x.maxinvid
-        )                   AS maxloc,
-        x.cnt,
-        x.maxinvid,
-        x.toploc,
-        x.botloc,
-        x.PlantCode,
-        x.InventoryId,
-        x.ProductId,
-        x.Barcode,
-        x.BatchNumber,
-        x.PalletNumber,
-        x.Weight,
-        x.ProductionDate,
-        x.WarehouseLocationId,
-        x.CreatedBy,
-        x.CreatedDate,
-        x.ModifiedBy,
-        x.ModifiedDate
-    INTO #MaxInvID
-    FROM (
-        -- Window functions run over ALL records including SHIPPED/LVADJ so
-        -- that barcodes with one shipped and one active copy are counted correctly
-        SELECT
-            COUNT(1) OVER (PARTITION BY ic.barcode)                         AS cnt,
-            MAX(ic.inventoryid) OVER (PARTITION BY ic.barcode)              AS maxinvid,
-            MAX(ic.WarehouseLocationId) OVER (PARTITION BY ic.barcode)      AS toploc,
-            MIN(ic.WarehouseLocationId) OVER (PARTITION BY ic.barcode)      AS botloc,
-            ic.PlantCode,
-            ic.InventoryId,
-            ic.ProductId,
-            ic.Barcode,
-            ic.BatchNumber,
-            ic.PalletNumber,
-            ic.Weight,
-            ic.ProductionDate,
-            ic.WarehouseLocationId,
-            ic.CreatedBy,
-            ic.CreatedDate,
-            ic.ModifiedBy,
-            ic.ModifiedDate
-        FROM InventoryCases ic WITH (READUNCOMMITTED)
-    ) x
-    JOIN WarehouseAreaLocations wal WITH (READUNCOMMITTED)
-        ON wal.LocationId = x.WarehouseLocationId
-    JOIN WarehouseAreas wa WITH (READUNCOMMITTED)
-        ON  wa.WarehouseId = wal.WarehouseId
-        AND wa.AreaId      = wal.AreaId
-        AND wa.IsAvailable = 1
-    -- Exclusion is in the outer WHERE, not inside the subquery,
-    -- so the window functions above see all records first
-    WHERE x.cnt > 1
-      AND x.WarehouseLocationId NOT IN ('SHIPPED','SHIPRTN','ADJUST','LVADJ')
+    DECLARE @ignoreLocs TABLE (locationid varchar(25));
+
+    INSERT INTO @ignoreLocs (locationid)
+    SELECT value
+    FROM STRING_SPLIT('SHIPPED,SHIPRTN,ADJUST,LVADJ,HAM1,HAM2,BELLY,MHARV,BLEND1,BLEND2,BLEND3,BLEND4,BLEND5,BLEND6,TB2', ',');
+
+    select 
+    (select top 1 warehouselocationid 
+    from Inventorycases ic with (readuncommitted) 
+    join WarehouseAreaLocations wal on wal.LocationId = ic.WarehouseLocationId
+    join WarehouseAreas wa on wa.WarehouseId = wal.WarehouseId 
+                        and wa.AreaId = wal.AreaId
+                        and wa.IsAvailable = 1
+    where inventoryid = maxinvid
+    ) maxloc
+    ,cnt
+    ,maxinvid 
+    ,toploc 
+    ,botloc 
+    ,x.PlantCode 
+    ,InventoryId
+    ,ProductId 
+    ,x.Barcode 
+    ,BatchNumber 
+    ,PalletNumber 
+    ,InventoryStatusId 
+    ,SapStorageLocation 
+    ,EstNumber 
+    ,VendorLot 
+    ,EntryInventoryMovementTypeId 
+    ,EntryOrderNumber
+    ,EntryOrderLineNumber
+    ,EntryDate 
+    ,EntryDeliveryNumber 
+    ,EntryDeliveryLineNumber 
+    ,EntryShift 
+    ,ExitInventoryMovementTypeId 
+    ,ExitOrderNumber 
+    ,ExitOrderLineNumber 
+    ,ExitDate
+    ,ExitShift
+    ,Weight 
+    ,ProductionDate 
+    ,EntryPostedToSap 
+    ,ExitPostedToSap 
+    ,PostedToSapDate 
+    ,x.CreatedBy 
+    ,x.CreatedDate
+    ,x.ModifiedBy 
+    ,x.ModifiedDate 
+    ,ExitDeliveryNumber 
+    ,ExitDeliveryLineNumber
+    ,WarehouseLocationId 
+    ,IsNonSerializedPallet 
+    ,Qty 
+    ,ReceiveUOM 
+    into #MaxInvID
+    from (
+        select count(1) over (partition by barcode) cnt
+            , max(inventoryid) over (partition by barcode) maxinvid
+            , max(WarehouseLocationId) over (partition by barcode) toploc
+            , min(WarehouseLocationId) over (partition by barcode) botloc
+            , * from InventoryCases with (readuncommitted)
+    ) x 
+    join WarehouseAreaLocations wal with (readuncommitted) on wal.LocationId = WarehouseLocationId
+    join WarehouseAreas wa with (readuncommitted) on wa.WarehouseId = wal.WarehouseId and wa.AreaId = wal.AreaId
+    where cnt > 1
+    and WarehouseLocationId not in (select locationid from @ignoreLocs)
 """
 
 SQL_DETECT = """
