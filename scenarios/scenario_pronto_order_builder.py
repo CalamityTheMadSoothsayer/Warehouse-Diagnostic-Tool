@@ -257,11 +257,7 @@ class ScenarioProntoOrderBuilder(tk.Frame):
         self._log.info(f"Pronto warehouse codes loaded: {', '.join(labels)}")
 
     def _on_warehouse_select(self, _=None):
-        code = self._warehouse_var.get()
-        for w in self._warehouses:
-            if w["ProntoWhseCode"] == code:
-                self._plant_code.set(w.get("SFShippingPoint", ""))
-                break
+        pass  # plant code is entered manually by the user
 
     def _lookup_vendor(self):
         tp_id = self._tp_id_var.get().strip()
