@@ -21,6 +21,8 @@ DESCRIPTION = (
 )
 
 SQL_BUILD = """
+    SET NOCOUNT ON;
+
     IF OBJECT_ID('tempdb..#MaxInvID') IS NOT NULL DROP TABLE #MaxInvID;
 
     DECLARE @ignoreLocs TABLE (locationid varchar(25));
@@ -129,6 +131,9 @@ def run() -> QueryResult:
     try:
         cursor = db.conn.cursor()
         cursor.execute(SQL_BUILD)
+        # Drain any non-result-set messages before running the SELECT
+        while cursor.nextset():
+            pass
         cursor.execute(SQL_DETECT)
         rows = cursor.fetchall()
         cols = [col[0] for col in cursor.description]
