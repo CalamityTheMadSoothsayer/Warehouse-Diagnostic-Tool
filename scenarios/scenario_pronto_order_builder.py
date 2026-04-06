@@ -295,6 +295,12 @@ class ScenarioProntoOrderBuilder(tk.Frame):
             messagebox.showwarning("Input Required", "Order Number is required.")
             return
 
+        filename_entered = self._file_name.get()
+
+        if not filename_entered.startswith("SO"):
+            messagebox.showwarning("Error", "Filename must begin with SO")
+            return
+
         h = "|".join([
             "H",
             order_num,
