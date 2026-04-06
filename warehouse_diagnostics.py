@@ -29,7 +29,7 @@ from scenarios.scenario_duplicate_inventory import ScenarioDuplicateInventory
 from scenarios.scenario_missing_carcasses import ScenarioMissingCarcasses
 from scenarios.scenario_failed_transactions import ScenarioFailedTransactions
 from scenarios.scenario_carcass_lookup import ScenarioCarcassLookup
-
+from scenarios.scenario_pronto_order_builder import ScenarioProntoOrderBuilder
 SCENARIOS = [
     ScenarioLoadWontClose,
     ScenarioInventoryCantRelease,
@@ -39,6 +39,7 @@ SCENARIOS = [
     ScenarioMissingCarcasses,
     ScenarioFailedTransactions,
     ScenarioCarcassLookup,
+    ScenarioProntoOrderBuilder,
     # Add future scenario classes here
 ]
 
