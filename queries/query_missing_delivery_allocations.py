@@ -18,6 +18,11 @@ DESCRIPTION = (
     "deliveryallocations. inventoryid is the shared key."
 )
 
+# vwInventoryDetails is a view of all inventory cases with their exit delivery info.
+# deliveryallocations links each inventory case to a specific delivery line.
+# A case present in the view but missing from deliveryallocations means the load
+# counts are inconsistent — the system sees the case as on the load but has no
+# allocation record to close against, which blocks the load from closing.
 SQL = """
     SELECT   v.inventoryid
     FROM     vwInventoryDetails AS v
@@ -38,6 +43,8 @@ def run(delivery_number: str) -> QueryResult:
     try:
         cursor = db.conn.cursor()
         cursor.execute(SQL, delivery_number)
+
+        # Flatten to a plain list of ID strings — simpler to display and join for messages
         rows = [str(row[0]) for row in cursor.fetchall()]
     except Exception as exc:
         result.success  = False
@@ -46,6 +53,7 @@ def run(delivery_number: str) -> QueryResult:
         result.add_message("error", result.headline)
         return result
 
+    # result.data is set regardless of outcome so the result card body always has content
     result.data = rows
 
     if rows:

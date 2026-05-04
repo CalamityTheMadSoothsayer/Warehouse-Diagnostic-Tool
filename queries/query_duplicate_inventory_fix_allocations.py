@@ -16,6 +16,7 @@ DESCRIPTION = (
     "linked to duplicate inventory. Copy the script and run it in SSMS."
 )
 
+# Pulls the plant name and server so the generated script is self-documenting
 SQL_HEADER = """
     SELECT TOP 1
         p.Description AS PlantName,
@@ -25,6 +26,9 @@ SQL_HEADER = """
         ON ic.PlantCode = p.PlantCode
 """
 
+# Selects stale InventoryIds that also have a linked DeliveryAllocations row.
+# DeliveryAllocations records must be deleted before the InventoryCase can be
+# safely moved to LVADJ — otherwise a foreign key or orphan record remains.
 SQL_IDS = """
     SELECT m.InventoryId
     FROM #MaxInvID m
@@ -64,11 +68,15 @@ def run() -> QueryResult:
         return result
 
     if not ids:
+        # No duplicate cases have linked allocation records — nothing to clean up
         result.status   = "ok"
         result.headline = "No linked DeliveryAllocations found — no script needed."
         result.add_message("success", f"  ✔ {TITLE}: {result.headline}")
         return result
 
+    # Build the DELETE script as a list of lines stored in result.data.
+    # Run this BEFORE the InventoryCases fix script — child records must be
+    # removed before moving the parent case to LVADJ.
     lines = [
         f"-- {plant}",
         f"-- {server}",

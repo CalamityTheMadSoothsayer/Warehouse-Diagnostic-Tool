@@ -27,6 +27,8 @@ import queries.query_duplicate_inventory_fix_cases     as q_fix_cases
 import queries.query_duplicate_inventory_fix_allocations  as q_fix_alloc
 import queries.query_duplicate_inventory_fix_qa_statuses  as q_fix_qa
 
+# Detection query must be first — it builds the #MaxInvID temp table
+# that the fix script queries all depend on. Reordering will break the fix scripts.
 QUERIES = [
     q_detect,
     q_fix_cases,
@@ -39,7 +41,8 @@ class ScenarioDuplicateInventory(tk.Frame):
 
     TITLE        = "Duplicate Inventory"
     ICON         = "⧉"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):
         kw.setdefault("bg", PALETTE["surface"])
@@ -123,6 +126,8 @@ class ScenarioDuplicateInventory(tk.Frame):
 
         def do():
             results = []
+            # Queries run sequentially — fix scripts depend on the temp table
+            # (#MaxInvID) created by the detection query, so order matters.
             for qry, card in self._result_cards:
                 result = qry.run()
                 results.append((qry, card, result))
@@ -133,7 +138,7 @@ class ScenarioDuplicateInventory(tk.Frame):
     def _post_run(self, results):
         self._run_btn.config(state="normal", text="▶  Run All Checks")
 
-        duplicates_found = False
+        duplicates_found  = False
         scripts_generated = 0
         errors            = 0
 
@@ -144,9 +149,10 @@ class ScenarioDuplicateInventory(tk.Frame):
                 errors += 1
             elif result.status == "issues_found":
                 if i == 0:
-                    # First card is the detection query, not a fix script
+                    # Index 0 is the detection query — "issues_found" means duplicates exist
                     duplicates_found = True
                 else:
+                    # Indices 1+ are fix script queries — "issues_found" means a script was generated
                     scripts_generated += 1
 
         total = len(results)

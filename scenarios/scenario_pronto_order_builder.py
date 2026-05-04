@@ -31,7 +31,8 @@ class ScenarioProntoOrderBuilder(tk.Frame):
 
     TITLE        = "Pronto Order Builder"
     ICON         = "📋"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):
         kw.setdefault("bg", PALETTE["surface"])
@@ -110,7 +111,7 @@ class ScenarioProntoOrderBuilder(tk.Frame):
         styled_label(right, "ROUTING", font=("Consolas", 9),
                      color=PALETTE["text_dim"]).pack(anchor="w", pady=(0, 4))
 
-        # Warehouse dropdown
+        # Warehouse dropdown — populated from WorkstationApplicationSettings on connect
         styled_label(right, "Warehouse Code", font=FONT_SMALL,
                      color=PALETTE["text_dim"]).pack(anchor="w", pady=(4, 0))
         self._warehouse_var = tk.StringVar()
@@ -200,6 +201,7 @@ class ScenarioProntoOrderBuilder(tk.Frame):
             "num_lbl":      None,
         }
 
+        # Line number formatted as NNN.00 (e.g. "001.00") to match Pronto D line format
         lbl = tk.Label(row, text=f"{idx:03d}.00", bg=PALETTE["surface"],
                        fg=PALETTE["text_dim"], font=FONT_MONO, width=6, anchor="w")
         lbl.pack(side="left", padx=(0, 4))
@@ -230,6 +232,7 @@ class ScenarioProntoOrderBuilder(tk.Frame):
             return
         self._d_lines.remove(lv)
         row.destroy()
+        # Renumber remaining lines to keep them sequential
         for i, line in enumerate(self._d_lines, 1):
             line["num_lbl"].config(text=f"{i:03d}.00")
 
@@ -279,6 +282,7 @@ class ScenarioProntoOrderBuilder(tk.Frame):
             messagebox.showerror("Not Found", result.headline)
             self._log.warning(f"Vendor lookup: {result.headline}")
             return
+        # Auto-fill vendor address fields from the database lookup result
         v = result.extracted
         self._vendor_name.set(v.get("VendorName", ""))
         self._street1.set(v.get("Street1", ""))
@@ -297,14 +301,17 @@ class ScenarioProntoOrderBuilder(tk.Frame):
 
         filename_entered = self._file_name.get()
 
+        # Pronto interface requires filenames to start with "SO" (Sales Order)
         if not filename_entered.startswith("SO"):
             messagebox.showwarning("Error", "Filename must begin with SO")
             return
 
+        # H line = order header, pipe-delimited.
+        # Field positions are fixed — the Pronto interface parses them positionally.
         h = "|".join([
             "H",
             order_num,
-            str(len(self._d_lines)),
+            str(len(self._d_lines)),   # total number of D (detail) lines
             self._tp_id_var.get().strip(),
             self._vendor_name.get().strip(),
             self._street1.get().strip(),
@@ -326,23 +333,25 @@ class ScenarioProntoOrderBuilder(tk.Frame):
             self._plant_code.get().strip(),
             self._sender_id.get().strip(),
             self._receiver_id.get().strip(),
-            "",                                   # trailing pipe
+            "",                                   # trailing pipe required by interface
         ])
 
+        # D lines = order detail rows, one per product line, pipe-delimited
         file_lines = [h]
         for i, lv in enumerate(self._d_lines, 1):
             d = "|".join([
                 "D",
                 order_num,
-                f"{i:03d}.00",
+                f"{i:03d}.00",                    # line number (e.g. "001.00")
                 lv["product_code"].get().strip(),
                 lv["base_qty"].get().strip(),
                 lv["instructions"].get().strip(),
                 lv["min_sell_by"].get().strip(),
-                "",   # trailing pipe
+                "",   # trailing pipe required by interface
             ])
             file_lines.append(d)
 
+        # Wrap in the JSON envelope expected by the Pronto file interface
         payload = {
             "FileName":  self._file_name.get().strip(),
             "FileLines": file_lines,

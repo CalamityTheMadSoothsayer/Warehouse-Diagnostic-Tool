@@ -15,6 +15,9 @@ DESCRIPTION = (
     "Provides scheduled and received head counts."
 )
 
+# LotDetails stores the planned (ScheduledHeadCount) vs actual (ReceivedHeadCount)
+# head counts for a given schedule group. A discrepancy between these values
+# may indicate missing or extra carcasses in the system.
 SQL = """
     SELECT
         ScheduledHeadCount,
@@ -51,6 +54,7 @@ def run(schedulegroup: str) -> QueryResult:
         result.add_message("error", f"  ✘ {result.headline}")
         return result
 
+    # Pull the two counts out by name for use in the headline summary
     scheduled = row[cols.index("ScheduledHeadCount")]
     received  = row[cols.index("ReceivedHeadCount")]
 

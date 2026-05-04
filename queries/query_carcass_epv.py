@@ -15,6 +15,9 @@ DESCRIPTION = (
     "Provides grade, quality program, approval details, and CPS transfer status."
 )
 
+# EpVCarcasses (Electronic Plant Verification) stores grading and quality program
+# data assigned to each carcass. CpsTransfer indicates whether this record has
+# been sent to the CPS (Carcass Processing System) downstream.
 SQL = """
     SELECT TOP 1
         Grade,
@@ -54,6 +57,7 @@ def run(carcass_id: str) -> QueryResult:
         result.add_message("error", f"  ✘ {result.headline}")
         return result
 
+    # Build headline from the two most diagnostic fields: grade and quality program
     result.status   = "ok"
     result.headline = f"EPV record found — Grade: {row[cols.index('Grade')]}  Program: {row[cols.index('QualityProgram')]}"
     result.data     = [f"{col}: {val}" for col, val in zip(cols, row)]

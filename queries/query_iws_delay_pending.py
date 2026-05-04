@@ -16,8 +16,13 @@ DESCRIPTION = (
     "WARNING: Must be connected to the IWS DB server."
 )
 
+# Trigger the warning banner if the total pending count reaches this threshold.
+# A small number of pending messages is normal churn; a high count indicates a backlog.
 PENDING_THRESHOLD = 25
 
+# Only counts messages from today so the result reflects current system state,
+# not accumulated historical backlog. Status NOT IN ('COMPLETED', 'ERROR') means
+# these messages are still waiting to be processed or are actively in-flight.
 SQL = """
     SELECT MessageName, COUNT(*) AS PendingCount
     FROM OutboundHostMessages
@@ -43,9 +48,11 @@ def run() -> QueryResult:
         result.add_message("error", result.headline)
         return result
 
+    # Sum across all message types to get a single total for threshold comparison
     total = sum(row[1] for row in rows)
 
-    # Always populate data so the breakdown is visible in the result card
+    # Always populate result.data even when status is ok — so the per-type breakdown
+    # is visible in the result card body regardless of whether a problem was found
     result.data = [f"{row[0]}: {row[1]}" for row in rows]
 
     if total >= PENDING_THRESHOLD:
@@ -57,6 +64,7 @@ def run() -> QueryResult:
         result.status   = "ok"
         result.headline = f"{total} total pending message(s) today — below threshold of {PENDING_THRESHOLD}."
         result.add_message("success", f"  ✔ {TITLE}: {result.headline}")
+        # Log each type individually so the detail is visible in the activity log
         if rows:
             for row in rows:
                 result.add_message("info", f"    {row[0]}: {row[1]}")

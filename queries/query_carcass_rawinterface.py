@@ -16,6 +16,11 @@ DESCRIPTION = (
     "carcass ID. Returns MessageId, StatusId, and the raw data payload."
 )
 
+# RawInterfaceData stores raw inbound/outbound interface messages.
+# The LIKE '%...%' scan checks the full Data payload text for the carcass ID.
+# Filtered to EPVService because that is the integration that sends carcass data.
+# NOTE: This is a full table scan — it can be slow on high-volume databases.
+# The scenario UI warns the user before this query starts.
 SQL = """
     SELECT
         MessageId,
@@ -40,6 +45,9 @@ def run(carcass_id: str) -> QueryResult:
             result.headline = "Query cancelled — disconnected."
             return result
         cursor.execute(SQL, carcass_id)
+
+        # fetchall() is used here (vs fetchone) because there may be multiple
+        # interface messages for the same carcass — we want to show all of them.
         rows = cursor.fetchall()
         cols = [col[0] for col in cursor.description]
     except Exception as exc:
@@ -57,6 +65,9 @@ def run(carcass_id: str) -> QueryResult:
 
     result.status   = "ok"
     result.headline = f"{len(rows)} raw interface record(s) found."
+
+    # Format each row as a single readable string for the result card body.
+    # The Data column contains the full raw message payload — may be long.
     result.data     = [
         f"MessageId: {row[cols.index('MessageId')]}  |  "
         f"StatusId: {row[cols.index('StatusId')]}  |  "

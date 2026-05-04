@@ -24,8 +24,9 @@ from db import Database
 
 import queries.query_replenishment_ineligible as q_ineligible
 
+# Each query in this list receives the pick face location as its argument.
 QUERIES = [
-    q_ineligible,
+    q_ineligible,   # finds pallets that match the product but are blocked, with a reason for each
     # Add future query modules here
 ]
 
@@ -34,7 +35,8 @@ class ScenarioReplenishmentIneligible(tk.Frame):
 
     TITLE        = "Pallet Won't Replenish to Location"
     ICON         = "↑"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):
         kw.setdefault("bg", PALETTE["surface"])

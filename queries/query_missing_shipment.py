@@ -16,6 +16,9 @@ DESCRIPTION = (
     "in shipmentStopDeliveries."
 )
 
+# shipmentStopDeliveries is the join table between shipments and delivery numbers.
+# A delivery number with no matching row here has no shipment assigned,
+# which prevents the load from being built or closed.
 SQL = """
     SELECT shipmentNumber
     FROM shipmentStopDeliveries
@@ -30,6 +33,8 @@ def run(delivery_number: str) -> QueryResult:
     try:
         cursor = db.conn.cursor()
         cursor.execute(SQL, delivery_number)
+
+        # Flatten to a list of shipment number strings for easy display
         rows = [str(row[0]) for row in cursor.fetchall()]
     except Exception as exc:
         result.success  = False
@@ -46,6 +51,7 @@ def run(delivery_number: str) -> QueryResult:
         result.add_message("info",  "    Resolution: Verify the delivery number and check shipmentStopDeliveries.")
     else:
         result.status   = "ok"
+        # Join multiple shipment numbers into one readable string for the headline
         result.headline = f"Shipment(s) found: {', '.join(rows)}"
         result.data     = rows
         result.add_message("success", f"  ✔ {TITLE}: {result.headline}")

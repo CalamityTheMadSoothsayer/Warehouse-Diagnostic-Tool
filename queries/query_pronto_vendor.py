@@ -12,6 +12,9 @@ from db import db
 TITLE       = "Vendor Lookup"
 DESCRIPTION = "Fetches vendor name and address from ThirdParties by ThirdPartyId."
 
+# ThirdParties holds supplier/vendor master data including address information.
+# ThirdPartyId is the identifier used in the Pronto interface H (header) line.
+# All returned fields map directly to H line positions in the order payload.
 SQL = """
     SELECT
         VendorName,
@@ -47,8 +50,11 @@ def run(third_party_id: str) -> QueryResult:
         result.add_message("warning", f"  ✘ {result.headline}")
         return result
 
-    result.status  = "ok"
+    result.status   = "ok"
     result.headline = f"Vendor found: {row[cols.index('VendorName')]}"
+
+    # Store each address field in result.extracted so the order builder form can
+    # auto-fill the vendor section without the analyst re-typing the data
     for col, val in zip(cols, row):
         result.extracted[col] = str(val) if val is not None else ""
 

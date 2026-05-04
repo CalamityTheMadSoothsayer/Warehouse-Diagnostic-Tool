@@ -35,7 +35,8 @@ QUERIES = [
 class ScenarioIWSDelay(tk.Frame):
 
     TITLE = "IWS Message Delay"
-    ENVIRONMENTS = ["IWS"]
+    ENVIRONMENTS   = ["IWS"]
+    BUSINESS_UNITS = ["Beef/Pork"]
     ICON  = "⟳"
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):

@@ -15,6 +15,7 @@ DESCRIPTION = (
     "to the LVADJ location. Copy the script and run it in SSMS."
 )
 
+# Pulls the plant name and server so the generated script is self-documenting
 SQL_HEADER = """
     SELECT TOP 1
         p.Description AS PlantName,
@@ -24,6 +25,9 @@ SQL_HEADER = """
         ON ic.PlantCode = p.PlantCode
 """
 
+# Selects only the stale duplicate InventoryIds (not the keeper).
+# maxinvid <> InventoryId means: this row is NOT the highest (current) copy.
+# The WarehouseAreas join confirms the location is still an active area.
 SQL_IDS = """
     SELECT m.InventoryId
     FROM #MaxInvID m
@@ -46,11 +50,13 @@ def run() -> QueryResult:
     try:
         cursor = db.conn.cursor()
 
+        # Run the header query first to get plant/server info for the script comments
         cursor.execute(SQL_HEADER)
         header_row = cursor.fetchone()
         plant  = header_row[0] if header_row else "Unknown Plant"
         server = header_row[1] if header_row else "Unknown Server"
 
+        # Collect all stale InventoryIds to include in the UPDATE statement
         cursor.execute(SQL_IDS)
         ids = [str(row[0]) for row in cursor.fetchall()]
     except Exception as exc:
@@ -61,11 +67,17 @@ def run() -> QueryResult:
         return result
 
     if not ids:
+        # #MaxInvID had rows but none need fixing — already cleaned or all in LVADJ
         result.status   = "ok"
         result.headline = "No duplicate records found — no script needed."
         result.add_message("success", f"  ✔ {TITLE}: {result.headline}")
         return result
 
+    # Build the UPDATE script as a list of lines stored in result.data.
+    # The result card displays these lines and provides a Copy button.
+    # BEGIN TRAN / COMMIT / ROLLBACK pattern lets the analyst verify before committing.
+    # LVADJ is the adjustment location — moving duplicates here takes them out of
+    # active picking/shipping without permanently deleting the record.
     lines = [
         f"-- {plant}",
         f"-- {server}",
@@ -79,6 +91,7 @@ def run() -> QueryResult:
         "WHERE InventoryId IN (",
     ]
     for i, inv_id in enumerate(ids):
+        # Add a trailing comma after every ID except the last
         comma = "," if i < len(ids) - 1 else ""
         lines.append(f"    '{inv_id}'{comma}")
     lines += [

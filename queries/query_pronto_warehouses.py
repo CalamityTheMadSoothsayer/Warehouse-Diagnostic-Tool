@@ -15,6 +15,9 @@ from db import db
 TITLE       = "Pronto Warehouse Codes"
 DESCRIPTION = "Loads Pronto warehouse code mappings from WorkstationApplicationSettings."
 
+# WorkstationApplicationSettings stores miscellaneous configuration as key/value pairs
+# scoped to a PackageName. The ProntoWhseCodeSFShippingPointMapping value is a JSON
+# array that maps each Pronto warehouse code to its corresponding ShopFloor shipping point.
 SQL = """
     SELECT TOP 1 Value
     FROM WorkstationApplicationSettings WITH (READUNCOMMITTED)
@@ -45,6 +48,7 @@ def run() -> QueryResult:
         return result
 
     try:
+        # The Value column stores a JSON array — parse it into a Python list of dicts
         warehouses = json.loads(row[0])
     except Exception as exc:
         result.success  = False
@@ -53,7 +57,9 @@ def run() -> QueryResult:
         result.add_message("error", result.headline)
         return result
 
-    result.status              = "ok"
-    result.headline            = f"{len(warehouses)} warehouse code(s) loaded."
+    result.status  = "ok"
+    result.headline = f"{len(warehouses)} warehouse code(s) loaded."
+
+    # Store the parsed list so the Pronto Order Builder scenario can populate its dropdown
     result.extracted["warehouses"] = warehouses
     return result

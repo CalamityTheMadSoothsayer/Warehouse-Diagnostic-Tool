@@ -17,6 +17,9 @@ DESCRIPTION = (
     "Returns ok if no shipment exists — use the Missing Shipment check for that."
 )
 
+# Looks up the shipment(s) for this delivery, then checks whether each has a trailerid.
+# A shipment without a trailer cannot be closed because the system needs trailer info
+# to generate the BOL and finalize the load.
 SQL = """
     SELECT s.shipmentNumber, s.trailerid
     FROM shipments s
@@ -44,12 +47,14 @@ def run(delivery_number: str) -> QueryResult:
         return result
 
     if not rows:
-        # No shipment found — not this query's concern
+        # No shipment found — not this query's concern; Missing Shipment check handles it
         result.status   = "ok"
         result.headline = "No shipment found — see Missing Shipment check."
         result.add_message("info", f"  — {TITLE}: {result.headline}")
         return result
 
+    # Split rows into two groups: shipments with no trailer vs shipments that have one.
+    # row[0] = shipmentNumber, row[1] = trailerid (None if not assigned)
     missing  = [str(row[0]) for row in rows if not row[1]]
     assigned = [f"{row[0]} → {row[1]}" for row in rows if row[1]]
 

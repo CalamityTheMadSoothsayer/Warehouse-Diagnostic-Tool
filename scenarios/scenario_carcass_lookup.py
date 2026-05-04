@@ -50,7 +50,8 @@ class ScenarioCarcassLookup(tk.Frame):
 
     TITLE        = "Carcass Lookup"
     ICON         = "🐖"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):
         kw.setdefault("bg", PALETTE["surface"])
@@ -139,14 +140,23 @@ class ScenarioCarcassLookup(tk.Frame):
 
         self._log.banner(f"Carcass Lookup — {carcass_id}")
 
-        # ── Shared state for parallel threads ────────────────────────────
+        # ── Threading model ───────────────────────────────────────────────────
+        # Four threads run concurrently to minimize total lookup time:
+        #   run_chain : BackTag → KillGroup → LotDetails (sequential within thread)
+        #   run_hot   : HotCarcasses (independent)
+        #   run_epv   : EpVCarcasses (independent)
+        #   run_raw   : RawInterfaceData (independent, may be slow)
+        #
+        # _finish_one is called by each thread as it completes. When all threads
+        # have reported back (completed[0] == total_queries), _finish is triggered
+        # on the main thread to display the final summary.
         import threading as _threading
 
         total_queries  = len(QUERIES)
-        completed      = [0]           # mutable counter
+        completed      = [0]           # mutable counter — list allows mutation from closures
         results_store  = {}            # qry → QueryResult
         lock           = _threading.Lock()
-        gate_failed    = [False]
+        gate_failed    = [False]       # set True if BackTag lookup fails (blocks chain)
 
         def _finish_one(qry, result):
             """Called from each worker thread when its query returns."""
@@ -155,7 +165,8 @@ class ScenarioCarcassLookup(tk.Frame):
                 completed[0] += 1
                 done = completed[0]
 
-            # Update this card immediately on the main thread
+            # UI updates must happen on the main thread — self.after(0, ...) schedules
+            # the callback to run on the next Tk event loop iteration
             self.after(0, lambda q=qry, r=result: self._apply_result(q, r))
 
             # Update progress label
@@ -168,11 +179,12 @@ class ScenarioCarcassLookup(tk.Frame):
                 self.after(0, lambda: self._finish(results_store, gate_failed[0]))
 
         def run_chain():
-            """BackTag → KillGroup → LotDetails (must be sequential)."""
+            """BackTag → KillGroup → LotDetails (must be sequential — each step feeds the next)."""
             bt_result = q_backtag.run(carcass_id)
             _finish_one(q_backtag, bt_result)
 
             if bt_result.status in ("error", "issues_found"):
+                # Gate failed — no BackTag record means KillGroup and LotDetails cannot run
                 gate_failed[0] = True
                 for qry in [q_killgroup, q_lotdetails]:
                     _finish_one(qry, _make_skipped())

@@ -16,17 +16,20 @@ DESCRIPTION = (
     "OrderDetailChange, ShipLoad, PorkHotCarcass."
 )
 
+# TransferStatus = -3 means the transaction failed permanently (not just pending/in-progress).
+# FailReason <> '' confirms a failure message is present — avoids false positives from
+# records that may have -3 status but no recorded reason.
 SQL = """
-    select count(StagingId) as Count, PosterType 
-    from MasterStaging 
-    where TransferStatus = -3 
+    select count(StagingId) as Count, PosterType
+    from MasterStaging
+    where TransferStatus = -3
         and postertype in ('InventoryAdjustment',
             'OrderAcknowledgement',
             'InventoryStatus',
             'TrailerStatus',
             'OrderDetailChange',
             'ShipLoad',
-            'PorkHotCarcass') 
+            'PorkHotCarcass')
         and FailReason <> ''
     group by PosterType
 """
@@ -47,10 +50,13 @@ def run() -> QueryResult:
         return result
 
     if not rows:
+        # No rows means no failed transactions — all clear
         result.status = "ok"
         result.headline = "No failed transactions found."
         result.add_message("success", f"  ✔ {TITLE}: {result.headline}")
     else:
+        # Each row is a (Count, PosterType) grouping — one entry per failing poster type.
+        # The result card body lists each type and how many records are stuck.
         result.status = "issues_found"
         result.headline = f"{len(rows)} failed transaction(s) found."
         result.data = [

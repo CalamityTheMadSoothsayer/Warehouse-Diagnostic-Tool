@@ -33,7 +33,8 @@ class ScenarioFailedTransactions(tk.Frame):
 
     TITLE        = "Failed Transactions"
     ICON         = "✕"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):
         kw.setdefault("bg", PALETTE["surface"])

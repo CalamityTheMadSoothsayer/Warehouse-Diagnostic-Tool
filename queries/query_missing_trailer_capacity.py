@@ -14,6 +14,9 @@ DESCRIPTION = (
     "Checks if the trailer attached to the shipment has a trailer capacity assigned."
 )
 
+# LEFT JOIN to trailers allows the check to return a row even if the trailer record
+# itself is missing. NULL OR 0 catches both "never set" and "set to zero" cases —
+# both prevent the load from closing correctly.
 SQL = """
     SELECT   s.trailerid
     FROM     shipments AS s
@@ -32,6 +35,8 @@ def run(delivery_number: str) -> QueryResult:
     try:
         cursor = db.conn.cursor()
         cursor.execute(SQL, delivery_number)
+
+        # Flatten to trailer ID strings for display
         rows = [str(row[0]) for row in cursor.fetchall()]
     except Exception as exc:
         result.success  = False
@@ -40,6 +45,7 @@ def run(delivery_number: str) -> QueryResult:
         result.add_message("error", result.headline)
         return result
 
+    # result.data is populated before the if/else so both branches have data in the card
     result.data = rows
 
     if rows:

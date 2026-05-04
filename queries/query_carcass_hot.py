@@ -15,6 +15,9 @@ DESCRIPTION = (
     "Provides side, kill dates, and approval details."
 )
 
+# HotCarcasses tracks carcasses processed through the hot boning line.
+# BackTagCarcassId links back to the BackTagCarcasses record.
+# ORDER BY KillDate DESC returns the most recent record if duplicates exist.
 SQL = """
     SELECT TOP 1
         Side,
@@ -50,6 +53,8 @@ def run(carcass_id: str) -> QueryResult:
         return result
 
     if not row:
+        # Not all carcasses go through hot boning — a missing record is "issues_found"
+        # (informational warning) rather than "error" (hard failure)
         result.status   = "issues_found"
         result.headline = f"No Hot Carcass record found for CarcassId: {carcass_id}"
         result.add_message("error", f"  ✘ {result.headline}")

@@ -27,11 +27,13 @@ import queries.query_missing_shipment as q_missing_shipment
 import queries.query_missing_trailer_capacity as q_missing_trailer_capacity
 import queries.query_missing_trailer as q_missing_trailer
 
+# Checks run in this order — each represents a distinct root cause for a load not closing.
+# All four are run regardless of earlier results so the full picture is captured at once.
 QUERIES = [
-    q_missing_shipment,
-    q_missing_trailer,
-    q_missing_trailer_capacity,
-    q_missing_alloc,
+    q_missing_shipment,           # Is there a shipment linked to this delivery?
+    q_missing_trailer,            # Does the shipment have a trailer assigned?
+    q_missing_trailer_capacity,   # Does the trailer have a capacity value set?
+    q_missing_alloc,              # Are all inventory cases linked in deliveryallocations?
     # Add future query modules here
 ]
 
@@ -39,7 +41,8 @@ QUERIES = [
 class ScenarioLoadWontClose(tk.Frame):
 
     TITLE = "Load Won't Close"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
     ICON  = "⚠"
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):

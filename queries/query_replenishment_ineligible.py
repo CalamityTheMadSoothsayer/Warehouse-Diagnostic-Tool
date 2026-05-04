@@ -20,14 +20,17 @@ DESCRIPTION = (
 SQL = """
 DECLARE @PickFaceLocation VARCHAR(50) = ?;
 
--- Get the ProductId configured for this pick face
+-- Look up the ProductId configured for the given pick face location.
+-- PickFaceLocations maps a location code to the product it should hold.
 DECLARE @ProductId INT = (
     SELECT TOP 1 ProductId
     FROM PickFaceLocations WITH (READUNCOMMITTED)
     WHERE LocationId = @PickFaceLocation
 );
 
--- CTE: latest directed task per pallet
+-- CTE: find the most recent directed task for each pallet.
+-- DirectedTasks represent warehouse work instructions (e.g. move, pick, replenish).
+-- StatusId 7 = completed/closed task. Any other status means the task is still active.
 WITH LatestDirectedTask AS (
     SELECT dt.*
     FROM DirectedTasks dt WITH (READUNCOMMITTED)
@@ -40,7 +43,10 @@ WITH LatestDirectedTask AS (
 
 SELECT
     vid.PalletNumber,
+    -- Classify why each pallet cannot be replenished
     CASE
+        -- Pallet is committed to a delivery — it cannot be replenished
+        -- because it is already allocated for outbound shipment
         WHEN EXISTS (
             SELECT 1
             FROM vwInventoryDetails invCheck WITH (READUNCOMMITTED)
@@ -48,6 +54,8 @@ SELECT
               AND invCheck.DeliveryNumber IS NOT NULL
         ) THEN 'Pallet is committed to a delivery'
 
+        -- A non-completed directed task already exists for this pallet.
+        -- The system will not create a second task until the first is resolved.
         WHEN EXISTS (
             SELECT 1
             FROM LatestDirectedTask dt
@@ -55,6 +63,8 @@ SELECT
               AND dt.StatusId NOT IN (7)
         ) THEN 'Active directed task already exists for pallet'
 
+        -- Pallet appears ineligible but neither known condition applies.
+        -- This may indicate a sort order issue or a new blocking condition.
         ELSE 'Unknown — pallet should be eligible, check sort order'
     END AS Reason
 
@@ -62,10 +72,11 @@ FROM vwInventoryDetails vid WITH (READUNCOMMITTED)
 LEFT JOIN LatestDirectedTask dt ON dt.PalletNumber = vid.PalletNumber
 
 WHERE
-    -- Match product for the pick face
+    -- Only look at pallets carrying the product configured for this pick face
     vid.ProductId = @ProductId
 
-    -- Pallet must be in a replenishment zone
+    -- Pallet must be in a replenishment zone (configured in WorkstationApplicationSettings).
+    -- ReplenishmentZones is a comma-separated list of ZoneIds stored in the settings table.
     AND vid.WarehouseLocationId IN (
         SELECT LocationId
         FROM WarehouseAreaLocations
@@ -78,7 +89,8 @@ WHERE
         )
     )
 
-    -- Exclude pallets that are already fully eligible
+    -- Exclude pallets that ARE fully eligible — we only want the blocked ones.
+    -- A pallet is eligible when: not committed to a delivery AND no active directed task.
     AND NOT (
         NOT EXISTS (
             SELECT 1
@@ -118,9 +130,12 @@ def run(location: str) -> QueryResult:
     else:
         result.status   = "issues_found"
         result.headline = f"{len(rows)} pallet(s) are ineligible for replenishment to {location}."
-        # Format as "PalletNumber — Reason" for display
+
+        # Each row is (PalletNumber, Reason) — left-pad the pallet number for alignment
         result.data     = [f"{row[0]:<20} {row[1]}" for row in rows]
+
         result.add_message("error",   f"  ✘ {result.headline}")
+        # Log each pallet and its reason individually so the activity log is searchable
         for row in rows:
             result.add_message("warning", f"    {row[0]}  →  {row[1]}")
 

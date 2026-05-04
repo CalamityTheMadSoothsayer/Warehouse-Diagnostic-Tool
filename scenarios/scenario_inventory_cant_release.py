@@ -33,7 +33,8 @@ QUERIES = [
 class ScenarioInventoryCantRelease(tk.Frame):
 
     TITLE = "Inventory Can't Be Released"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
     ICON  = "🔒"
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):

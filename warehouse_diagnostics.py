@@ -8,6 +8,8 @@ To add a new scenario
 3. Add one import and one entry to SCENARIOS below.
 """
 
+import json
+import os
 import tkinter as tk
 from tkinter import messagebox
 import threading
@@ -20,6 +22,17 @@ from common import (
 )
 from db import db, load_plants, PYODBC_AVAILABLE
 
+
+def _load_business_units() -> list[str]:
+    path = os.path.join(os.path.dirname(__file__), 'business_units.json')
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        return ["Beef/Pork", "Poultry", "Case-Ready"]
+
+BUSINESS_UNITS = _load_business_units()
+
 # ── Register scenarios here ───────────────────────────────────────────────────
 from scenarios.scenario_load_wont_close import ScenarioLoadWontClose
 from scenarios.scenario_inventory_cant_release import ScenarioInventoryCantRelease
@@ -30,6 +43,11 @@ from scenarios.scenario_missing_carcasses import ScenarioMissingCarcasses
 from scenarios.scenario_failed_transactions import ScenarioFailedTransactions
 from scenarios.scenario_carcass_lookup import ScenarioCarcassLookup
 from scenarios.scenario_pronto_order_builder import ScenarioProntoOrderBuilder
+
+# Always-visible utilities — not part of the SCENARIOS list
+from scenarios.scenario_query_builder import ScenarioQueryBuilder
+from scenarios.scenario_settings      import ScenarioSettings
+
 SCENARIOS = [
     ScenarioLoadWontClose,
     ScenarioInventoryCantRelease,
@@ -492,6 +510,28 @@ class WarehouseDiagnosticsApp(tk.Tk):
         styled_label(left, "  SCENARIOS", font=("Consolas", 9),
                      color=PALETTE["text_dim"]).pack(anchor="w", padx=10, pady=(4, 4))
 
+        # Business unit filter
+        bu_frame = tk.Frame(left, bg=PALETTE["surface"], padx=10)
+        bu_frame.pack(fill="x", pady=(0, 4))
+        styled_label(bu_frame, "Business Unit", font=("Consolas", 8),
+                     color=PALETTE["text_dim"]).pack(anchor="w", pady=(0, 3))
+        self._bu_filter_var = tk.StringVar(value="All")
+        bu_options = ["All"] + BUSINESS_UNITS
+        self._bu_menu = tk.OptionMenu(bu_frame, self._bu_filter_var, *bu_options)
+        bu_menu = self._bu_menu
+        bu_menu.config(bg=PALETTE["entry_bg"], fg=PALETTE["text"],
+                       activebackground=PALETTE["surface2"],
+                       activeforeground=PALETTE["accent_text"],
+                       relief="flat", bd=0, font=FONT_SMALL,
+                       highlightthickness=1,
+                       highlightbackground=PALETTE["border"],
+                       width=18)
+        bu_menu["menu"].config(bg=PALETTE["entry_bg"], fg=PALETTE["text"],
+                                activebackground=PALETTE["accent"],
+                                activeforeground="#0f1117")
+        bu_menu.pack(fill="x")
+        self._bu_filter_var.trace_add("write", self._on_bu_filter_change)
+
         # Search box
         search_frame = tk.Frame(left, bg=PALETTE["surface"], padx=10)
         search_frame.pack(fill="x", pady=(0, 4))
@@ -527,6 +567,31 @@ class WarehouseDiagnosticsApp(tk.Tk):
             # Do NOT pack here — _refresh_sidebar_visibility controls visibility
             self._sidebar_btns[ScenarioClass] = btn
 
+        # ── Always-visible utility buttons ───────────────────────────────────
+        separator(left).pack(fill="x", pady=4)
+        self._qb_btn = tk.Button(
+            left,
+            text=f"  {ScenarioQueryBuilder.ICON}  {ScenarioQueryBuilder.TITLE}",
+            bg=PALETTE["surface"], fg=PALETTE["text_dim"],
+            activebackground=PALETTE["surface2"],
+            activeforeground=PALETTE["accent_text"],
+            relief="flat", bd=0, cursor="hand2",
+            font=FONT_SMALL, anchor="w",
+            command=self._open_query_builder,
+        )
+        self._qb_btn.pack(fill="x")
+        self._settings_btn = tk.Button(
+            left,
+            text=f"  {ScenarioSettings.ICON}  {ScenarioSettings.TITLE}",
+            bg=PALETTE["surface"], fg=PALETTE["text_dim"],
+            activebackground=PALETTE["surface2"],
+            activeforeground=PALETTE["accent_text"],
+            relief="flat", bd=0, cursor="hand2",
+            font=FONT_SMALL, anchor="w",
+            command=self._open_settings,
+        )
+        self._settings_btn.pack(fill="x")
+
         # Boot — hide all scenario buttons until a plant is connected
         self._refresh_sidebar_visibility(None)
         self._update_overlay()
@@ -534,6 +599,68 @@ class WarehouseDiagnosticsApp(tk.Tk):
         self._log.info("Select a plant and connect using the left panel.")
         if not PYODBC_AVAILABLE:
             self._log.warning("pyodbc is not installed.  Run:  pip install pyodbc")
+
+    # ── Query Builder ─────────────────────────────────────────────────────────
+    def _open_query_builder(self):
+        """Open (or focus) the Query Builder tab. No DB connection required."""
+        key = ScenarioQueryBuilder
+        if self._tab_bar.has_tab(key):
+            if self._tab_bar.active_key == key:
+                self._close_tab(key)
+            else:
+                self._tab_bar.set_active(key)
+                self._show_frame(key)
+            return
+
+        if key not in self._open_frames:
+            wrapper  = ScrollableFrame(self._content)
+            builder  = ScenarioQueryBuilder(wrapper.inner, log=self._log, db=db)
+            builder.pack(fill="both", expand=True)
+            self._open_frames[key] = wrapper
+
+        self._tab_bar.open_tab(key, ScenarioQueryBuilder.TITLE, ScenarioQueryBuilder.ICON)
+        self._show_frame(key)
+        self._set_sidebar_active(key)
+        self._update_overlay()
+
+    def _open_settings(self):
+        """Open (or focus) the Settings tab. No DB connection required."""
+        key = ScenarioSettings
+        if self._tab_bar.has_tab(key):
+            if self._tab_bar.active_key == key:
+                self._close_tab(key)
+            else:
+                self._tab_bar.set_active(key)
+                self._show_frame(key)
+            return
+
+        if key not in self._open_frames:
+            wrapper  = ScrollableFrame(self._content)
+            settings = ScenarioSettings(wrapper.inner, log=self._log,
+                                        on_settings_saved=self._on_settings_saved)
+            settings.pack(fill="both", expand=True)
+            self._open_frames[key] = wrapper
+
+        self._tab_bar.open_tab(key, ScenarioSettings.TITLE, ScenarioSettings.ICON)
+        self._show_frame(key)
+        self._set_sidebar_active(key)
+        self._update_overlay()
+
+    def _on_settings_saved(self):
+        """Called after settings are saved — reload plant list and BU filter."""
+        self._conn_panel._load_plants()
+        global BUSINESS_UNITS
+        BUSINESS_UNITS = _load_business_units()
+        # Rebuild the BU filter menu to reflect any new/removed BUs
+        menu = self._bu_menu["menu"]
+        menu.delete(0, "end")
+        menu.add_command(label="All", command=lambda: self._on_bu_filter_change("All"))
+        for bu in BUSINESS_UNITS:
+            menu.add_command(label=bu, command=lambda b=bu: self._on_bu_filter_change(b))
+        # If the selected BU was removed, reset to All
+        if self._bu_filter_var.get() not in ("All",) + tuple(BUSINESS_UNITS):
+            self._bu_filter_var.set("All")
+            self._on_bu_filter_change("All")
 
     # ── Tab management ────────────────────────────────────────────────────────
     def _toggle_scenario(self, ScenarioClass):
@@ -593,6 +720,14 @@ class WarehouseDiagnosticsApp(tk.Tk):
                 btn.config(bg=PALETTE["surface2"], fg=PALETTE["accent_text"])
             else:
                 btn.config(bg=PALETTE["surface"], fg=PALETTE["text"])
+        if active_key == ScenarioQueryBuilder:
+            self._qb_btn.config(bg=PALETTE["surface2"], fg=PALETTE["accent_text"])
+        else:
+            self._qb_btn.config(bg=PALETTE["surface"], fg=PALETTE["text_dim"])
+        if active_key == ScenarioSettings:
+            self._settings_btn.config(bg=PALETTE["surface2"], fg=PALETTE["accent_text"])
+        else:
+            self._settings_btn.config(bg=PALETTE["surface"], fg=PALETTE["text_dim"])
 
     # ── Tab bar callbacks ─────────────────────────────────────────────────────
     def _on_tab_select(self, key):
@@ -605,11 +740,15 @@ class WarehouseDiagnosticsApp(tk.Tk):
 
     # ── Overlay ───────────────────────────────────────────────────────────────
     def _update_overlay(self):
-        if not db.connected:
+        active = self._tab_bar.active_key
+        # These utilities need no connection — never show the overlay for them
+        if active in (ScenarioQueryBuilder, ScenarioSettings):
+            self._overlay.lower()
+        elif not db.connected:
             self._overlay_msg.config(
                 text="Connect to a plant using the left panel to get started.")
             self._overlay.lift()
-        elif not self._tab_bar.active_key:
+        elif not active:
             self._overlay_msg.config(
                 text="Select a scenario from the left panel.")
             self._overlay.lift()
@@ -637,13 +776,19 @@ class WarehouseDiagnosticsApp(tk.Tk):
         self._update_overlay()
 
     def _refresh_sidebar_visibility(self, environment: str | None):
-        """Show only scenarios that match the connected environment and search term."""
-        term = self._search_var.get().strip().lower() if hasattr(self, "_search_var") else ""
+        """Show only scenarios matching connected environment, BU filter, and search term."""
+        term       = self._search_var.get().strip().lower() if hasattr(self, "_search_var") else ""
+        bu_filter  = self._bu_filter_var.get() if hasattr(self, "_bu_filter_var") else "All"
+
         for sc, btn in self._sidebar_btns.items():
             env_match    = environment and environment in sc.ENVIRONMENTS
             search_terms = self._search_index.get(sc, [sc.TITLE.lower()])
             search_match = not term or any(term in t for t in search_terms)
-            if env_match and search_match:
+            # BU filter: "All" shows everything; otherwise must be in scenario's BUSINESS_UNITS
+            sc_bus   = getattr(sc, 'BUSINESS_UNITS', [])
+            bu_match = bu_filter == "All" or bu_filter in sc_bus
+
+            if env_match and search_match and bu_match:
                 btn.pack(fill="x")
             else:
                 btn.pack_forget()
@@ -653,7 +798,10 @@ class WarehouseDiagnosticsApp(tk.Tk):
         self._update_overlay()
 
     def _on_search_change(self, *_):
-        """Re-filter sidebar when search term changes."""
+        env = db.active_plant.environment.upper() if db.connected and db.active_plant else None
+        self._refresh_sidebar_visibility(env)
+
+    def _on_bu_filter_change(self, *_):
         env = db.active_plant.environment.upper() if db.connected and db.active_plant else None
         self._refresh_sidebar_visibility(env)
 

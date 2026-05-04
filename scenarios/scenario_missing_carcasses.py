@@ -21,6 +21,8 @@ from common import (
 from db import Database
 
 # ── All queries that contribute to this scenario ──────────────────────────────
+# Missing carcasses are often caused by failed MasterStaging transactions that
+# were never posted to CPS. Check for failures as the first diagnostic step.
 import queries.query_failed_transactions as q_failed_transactions
 
 QUERIES = [
@@ -31,7 +33,8 @@ QUERIES = [
 class ScenarioMissingCarcasses(tk.Frame):
 
     TITLE = "Missing Carcasses"
-    ENVIRONMENTS = ["PROD", "QA"]
+    ENVIRONMENTS   = ["PROD", "QA"]
+    BUSINESS_UNITS = ["Beef/Pork"]
     ICON = "❌"
 
     def __init__(self, parent, log: LogPanel, db: Database, **kw):
