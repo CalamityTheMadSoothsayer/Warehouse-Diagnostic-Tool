@@ -76,6 +76,12 @@ def generate_query_file(scenario_prefix: str, query: QuerySpec) -> str:
     else:
         func_sig = "def run() -> QueryResult:"
 
+    # Params that arrive from upstream via takes — these are pre-formatted SQL
+    # literals ('val1', 'val2') and must be substituted directly into the SQL
+    # string rather than bound as ? parameters (you can't bind an IN list as a
+    # single ? value in pyodbc).
+    takes_param_names = {edge.target_param.lstrip('@') for edge in query.takes}
+
     # Build SQL block constants and execution code
     block_consts = []
     exec_lines   = []
@@ -86,39 +92,47 @@ def generate_query_file(scenario_prefix: str, query: QuerySpec) -> str:
         sql_repr = '"""\n' + textwrap.indent(block.sql.strip(), '    ') + '\n"""'
         block_consts.append(f"# {block.label}\n{const_name} = {sql_repr}")
 
-        # Determine which params this block uses
-        block_params = []
+        # Determine which params this block uses, split by type
+        block_user_params     = []  # bound via ?  (user-supplied)
+        block_injected_params = []  # substituted directly into SQL (from upstream takes)
         for name in all_sig_params:
             if re.search(r'@' + re.escape(name) + r'\b', block.sql, re.IGNORECASE):
-                block_params.append(name)
+                if name in takes_param_names:
+                    block_injected_params.append(name)
+                else:
+                    block_user_params.append(name)
 
+        # Build the EXEC SQL constant: only replace user @params with ?
+        # Injected @params are left as-is and substituted at runtime
         positional_sql_const = f"_{const_name}_EXEC"
-        positional_sql = _sql_to_positional(block.sql.strip(), block_params)
-        block_consts.append(
-            f"{positional_sql_const} = {const_name}"
-            + (
-                " \\\n    " + " \\\n    ".join(
-                    f'.replace("@{p}", "?")' for p in block_params  # already done, but keep for clarity
-                ) if False else ""  # substitution already handled below
-            )
-        )
-
-        # Build the positional SQL string directly
-        # We swap the @var→? in the constant itself for cleanliness
+        positional_sql = _sql_to_positional(block.sql.strip(), block_user_params)
         positional_sql_repr = '"""\n' + textwrap.indent(positional_sql, '    ') + '\n"""'
-        block_consts[-1] = f"{positional_sql_const} = {positional_sql_repr}"
+        block_consts.append(f"{positional_sql_const} = {positional_sql_repr}")
+
+        # At runtime: substitute injected params into the SQL string first,
+        # then execute with ? bindings for the remaining user params.
+        exec_sql_var = f"_sql_block_{i}"
+        exec_lines.append(f"        {exec_sql_var} = {positional_sql_const}")
+        for tp in block_injected_params:
+            # Plain string replace — @param is always preceded by nothing word-like
+            # (it starts with @) so partial matches are not a concern.
+            exec_lines.append(
+                f"        {exec_sql_var} = {exec_sql_var}.replace('@{tp}', {tp})"
+            )
 
         # Build cursor.execute call
-        if block_params:
-            params_str = ', '.join(block_params)
-            exec_lines.append(f"        cursor.execute({positional_sql_const}, ({params_str},) if True else None)")
-            # Simpler: just pass the tuple
-            exec_lines[-1] = f"        cursor.execute({positional_sql_const}, ({params_str},))"
-            # Single param doesn't need trailing comma in a real call
-            if len(block_params) == 1:
-                exec_lines[-1] = f"        cursor.execute({positional_sql_const}, {block_params[0]})"
+        if block_user_params:
+            if len(block_user_params) == 1:
+                exec_lines.append(
+                    f"        cursor.execute({exec_sql_var}, {block_user_params[0]})"
+                )
+            else:
+                params_str = ', '.join(block_user_params)
+                exec_lines.append(
+                    f"        cursor.execute({exec_sql_var}, ({params_str},))"
+                )
         else:
-            exec_lines.append(f"        cursor.execute({positional_sql_const})")
+            exec_lines.append(f"        cursor.execute({exec_sql_var})")
 
         # Drain non-result-set messages between blocks (required before a SELECT after DDL/DML)
         if i < len(query.sql_blocks):
@@ -132,17 +146,49 @@ def generate_query_file(scenario_prefix: str, query: QuerySpec) -> str:
     ]
 
     # Build gives: result.extracted assignments
+    # For each declared key, find the column with a matching name (case-insensitive)
+    # and extract it.  If a query returns multiple rows the value is stored as a
+    # list; a single row stores a plain string.  Downstream queries receive the
+    # value via _generate_thread_body which normalises lists to comma-separated
+    # strings so they can be used directly in SQL WHERE / IN clauses.
     gives_lines = []
     for key in query.gives:
         gives_lines.append(
-            f'        # Store {key} for downstream queries that depend on this one\n'
-            f'        # TODO: assign result.extracted["{key}"] from the appropriate column'
+            f'        # ── Extracted: "{key}" ────────────────────────────────────────────\n'
+            f'        _col_{key} = next(\n'
+            f'            (i for i, c in enumerate(cols) if c.lower() == "{key.lower()}"),\n'
+            f'            None,\n'
+            f'        )\n'
+            f'        if _col_{key} is not None:\n'
+            f'            _vals_{key} = [\n'
+            f'                str(row[_col_{key}])\n'
+            f'                for row in rows\n'
+            f'                if row[_col_{key}] is not None\n'
+            f'            ]\n'
+            f'            result.extracted["{key}"] = (\n'
+            f'                _vals_{key}[0] if len(_vals_{key}) == 1 else _vals_{key}\n'
+            f'            )\n'
+            f'        else:\n'
+            f'            result.extracted["{key}"] = ""\n'
+            f'            result.add_message(\n'
+            f'                "warning",\n'
+            f'                f\'[{{TITLE}}] Column \\"{key}\\" not found in result set — \'\n'
+            f'                f\'available columns: {{", ".join(cols)}}\',\n'
+            f'            )'
         )
 
-    # Display SQL: use original SQL of the last meaningful block, substituting param values
+    # Display SQL: use original SQL of the last meaningful block, substituting param values.
+    # User-supplied params are wrapped in double quotes for readability.
+    # Injected params (from takes) are already formatted as SQL literals ('v1', 'v2')
+    # so they are substituted directly without any extra quoting.
     display_sql_parts = []
     for name in all_sig_params:
-        display_sql_parts.append(f'    .replace("@{name}", f\'\\"{{{name}}}\\"\')' )
+        if name in takes_param_names:
+            # Already a SQL literal — substitute directly
+            display_sql_parts.append(f'    .replace("@{name}", {name})')
+        else:
+            # User value — wrap in double quotes for display clarity
+            display_sql_parts.append(f'    .replace("@{name}", f\'\\"{{{name}}}\\"\')' )
     if display_sql_parts:
         display_sql = (
             "    result.sql = SQL_BLOCK_" + str(len(query.sql_blocks)) + ".strip()\\\n"
@@ -166,7 +212,6 @@ def generate_query_file(scenario_prefix: str, query: QuerySpec) -> str:
         '',
         'from common import QueryResult',
         'from db import db',
-        '',
         f'TITLE       = "{query.title}"',
         f'DESCRIPTION = (',
         f'    "{query.description}"',
@@ -236,30 +281,8 @@ def _generate_thread_body(
         var = f"q_{q.id}"
         alias = f"r_{q.id}"
 
-        # Build argument list: user params come from the scenario's input vars,
-        # extracted params come from upstream result.extracted
-        call_args = []
-
-        # Map target_param → source expression
-        takes_map = {edge.target_param.lstrip('@'): (edge.source_query_id, edge.extracted_key)
-                     for edge in q.takes}
-
-        for p in q.parameters:
-            if p.name in takes_map:
-                src_id, key = takes_map[p.name]
-                call_args.append(f'r_{src_id}.extracted.get("{key}", "")')
-            else:
-                call_args.append(f'self._param_vars.get("{p.name}", tk.StringVar()).get().strip()')
-
-        # Any takes not covered by parameters (purely injected, not in SQL directly)
-        for edge in q.takes:
-            tp = edge.target_param.lstrip('@')
-            if not any(p.name == tp for p in q.parameters):
-                call_args.append(f'r_{edge.source_query_id}.extracted.get("{edge.extracted_key}", "")')
-
-        call_str = ', '.join(call_args)
-
-        # Gate: if this query depends on an upstream query via takes, check upstream succeeded
+        # Gate: if this query depends on an upstream query via takes, skip it
+        # when that upstream failed.
         for edge in q.takes:
             src_id = edge.source_query_id
             lines += [
@@ -268,6 +291,51 @@ def _generate_thread_body(
                 f'                return',
             ]
             break  # only need one gate check per query
+
+        # Resolve extracted values from upstream queries.
+        # An upstream query that returns multiple rows stores a *list* in
+        # result.extracted; one that returns a single row stores a plain string.
+        # Format as SQL-safe single-quoted literals so they can be substituted
+        # directly into the SQL string (e.g. WHERE col IN (@param) works for
+        # both single and multiple values without needing dynamic ? placeholders).
+        injected: dict[str, str] = {}  # param_name → local variable name
+        for edge in q.takes:
+            tp = edge.target_param.lstrip('@')
+            src_id = edge.source_query_id
+            key = edge.extracted_key
+            raw_var   = f'_raw_{q.id}_{tp}'
+            local_var = f'_{q.id}_{tp}_val'
+            lines += [
+                f'            {raw_var} = r_{src_id}.extracted.get("{key}", "")',
+                f'            if isinstance({raw_var}, list):',
+                f'                {local_var} = ", ".join(',
+                f'                    "\'" + str(v).replace("\'", "\'\'") + "\'"',
+                f'                    for v in {raw_var}',
+                f'                )',
+                f'            else:',
+                f'                _s_{tp} = str({raw_var})',
+                f'                {local_var} = "\'" + _s_{tp}.replace("\'", "\'\'") + "\'"',
+            ]
+            injected[tp] = local_var
+
+        # Build argument list: user params come from the scenario's input vars;
+        # injected params use the normalised local variables above.
+        call_args = []
+        for p in q.parameters:
+            if p.name in injected:
+                call_args.append(injected[p.name])
+            else:
+                call_args.append(
+                    f'self._param_vars.get("{p.name}", tk.StringVar()).get().strip()'
+                )
+
+        # Any takes not covered by declared parameters (purely injected)
+        for edge in q.takes:
+            tp = edge.target_param.lstrip('@')
+            if not any(p.name == tp for p in q.parameters):
+                call_args.append(injected[tp])
+
+        call_str = ', '.join(call_args)
 
         lines += [
             f'            {alias} = {var}.run({call_str})',
